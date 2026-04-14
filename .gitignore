@@ -1,11 +1,12 @@
 ._*
 __pycache__/
+.DS_Store
 
-data/
-figures/
-refine-logs/
-reports/
-results/
+/data/
+/figures/
+/refine-logs/
+/reports/
+/results/
 
 IDEA_REPORT.md
 NOVELTY_REPORT.md
