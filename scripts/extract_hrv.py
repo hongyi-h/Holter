@@ -30,10 +30,15 @@ def main():
         except Exception as e:
             print(f"  {pid}: SKIP - {e}")
 
-    os.makedirs(os.path.dirname(args.output), exist_ok=True)
-    with open(args.output, "w") as f:
+    output_path = args.output
+    if os.path.isdir(output_path) or output_path.endswith("/"):
+        os.makedirs(output_path, exist_ok=True)
+        output_path = os.path.join(output_path, "hrv_features.json")
+    else:
+        os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+    with open(output_path, "w") as f:
         json.dump(all_hrv, f, indent=2)
-    print(f"Saved HRV features to {args.output}")
+    print(f"Saved HRV features to {output_path}")
 
 
 if __name__ == "__main__":
