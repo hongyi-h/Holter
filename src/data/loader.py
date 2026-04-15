@@ -29,6 +29,7 @@ def load_csv(csv_path: str) -> dict:
         raise ValueError(f"Empty CSV: {csv_path}")
     row = df.iloc[0].to_dict()
     row["age"] = int(row["age"]) if pd.notna(row["age"]) else None
+    row["pid"] = str(row["pid"]).strip() if pd.notna(row.get("pid")) else ""
     row["total_beats"] = int(row["total_beats"]) if pd.notna(row["total_beats"]) else 0
     row["mean_hr"] = int(row["mean_hr"]) if pd.notna(row["mean_hr"]) else None
     row["pvc_count"] = int(row["pvc_count"]) if pd.notna(row["pvc_count"]) else 0

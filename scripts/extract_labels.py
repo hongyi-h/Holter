@@ -73,6 +73,9 @@ def main():
         try:
             patient = load_patient(rec)
             pid = patient.get("pid", rec["stem"])
+            # Guard against NaN pid from CSV parsing
+            if pid is None or (isinstance(pid, float) and np.isnan(pid)):
+                pid = rec["stem"]
 
             if args.method == "regex":
                 labels = parse_patient_labels(patient)
