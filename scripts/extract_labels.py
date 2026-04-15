@@ -111,21 +111,41 @@ def main():
         "patients": results,
     }
 
+    # Resolve output path
     output_path = args.output
     if os.path.isdir(output_path) or output_path.endswith("/"):
         os.makedirs(output_path, exist_ok=True)
         output_path = os.path.join(output_path, f"labels_{args.method}.json")
     else:
         os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+
+    # --- Save JSON (human-readable, with raw text and stats) ---
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(output, f, indent=2, ensure_ascii=False)
+
+    # --- Save npz (for downstream: linear_probe.py, dataset.py) ---
+    pids = [r["pid"] for r in results]
+    label_matrix = np.array(
+        [[r["binary"].get(ln, 0) for ln in LABEL_NAMES] for r in results],
+        dtype=np.int32,
+    )
+    npz_path = output_path.replace(".json", ".npz")
+    if npz_path == output_path:
+        npz_path = output_path + ".npz"
+    np.savez(
+        npz_path,
+        labels=label_matrix,
+        label_names=np.array(LABEL_NAMES),
+        patient_ids=np.array(pids),
+    )
 
     print(f"\nExtracted labels for {total} patients ({args.method})")
     print("Label prevalence:")
     for ln in LABEL_NAMES:
         prev = label_counts[ln] / max(total, 1)
         print(f"  {ln}: {label_counts[ln]}/{total} ({prev:.1%})")
-    print(f"Saved to {output_path}")
+    print(f"JSON: {output_path}")
+    print(f"NPZ:  {npz_path}  (shape: {label_matrix.shape})")
 
 
 if __name__ == "__main__":

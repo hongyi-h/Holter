@@ -25,16 +25,37 @@ LABEL_PATTERNS = {
     "pause": [r"停搏", r"长间歇", r"RR间期"],
 }
 
+# Negation prefixes: if any of these appear within 6 chars before the matched
+# keyword, the match is considered negated (label = 0).
+NEGATION_PREFIXES = [
+    r"未见明显", r"未发现", r"未见异常", r"未见",
+    r"无明确", r"无明显", r"不考虑", r"不支持", r"不伴",
+    r"未及", r"未有", r"排除", r"无",
+]
+
+
+def _is_negated(text, match_start, window=6):
+    """Check if a match is preceded by a negation word within `window` chars."""
+    prefix = text[max(0, match_start - window):match_start]
+    for neg in NEGATION_PREFIXES:
+        if re.search(neg, prefix):
+            return True
+    return False
+
 
 def parse_conclusion(text):
-    """Parse a single conclusion text into binary labels."""
+    """Parse a single conclusion text into binary labels.
+
+    Handles negation: 「未见ST-T改变」→ st_change=0.
+    """
     if not text or not isinstance(text, str):
         return {name: 0 for name in LABEL_NAMES}
     labels = {}
     for name, patterns in LABEL_PATTERNS.items():
         labels[name] = 0
         for pat in patterns:
-            if re.search(pat, text, re.IGNORECASE):
+            m = re.search(pat, text, re.IGNORECASE)
+            if m and not _is_negated(text, m.start()):
                 labels[name] = 1
                 break
     return labels

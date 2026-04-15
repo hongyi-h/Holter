@@ -34,13 +34,19 @@ def build_prompt(conclusion_text: str) -> str:
         for i, name in enumerate(LABEL_NAMES)
     )
     return (
-        "你是一位专业的心电图报告分析AI。请根据以下Holter心电图报告结论，"
-        "判断每个诊断标签是否存在（1=存在，0=不存在）。\n\n"
-        f"报告结论：\n{conclusion_text}\n\n"
-        f"诊断标签列表：\n{label_list}\n\n"
-        "请以JSON格式输出结果，只包含标签名和0/1值，例如：\n"
+        '你是一位专业的心电图报告分析AI。请根据以下Holter心电图报告结论，'
+        '判断每个诊断标签是否存在（1=存在，0=不存在）。\n\n'
+        '**重要规则**：\n'
+        '- 如果报告中出现"未见"、"未发现"、"无"、"未及"、\n'
+        '  "无明显"、"排除"等否定词修饰某个诊断，则该标签应标注为0。\n'
+        '- 例如"未见缺血型ST-T改变"→ st_change=0；\n'
+        '        "未见房室传导阻滞"→ av_block=0。\n'
+        '- 只有报告明确肯定存在该诊断时才标注为1。\n\n'
+        f'报告结论：\n{conclusion_text}\n\n'
+        f'诊断标签列表：\n{label_list}\n\n'
+        '请以JSON格式输出结果，只包含标签名和0/1值，例如：\n'
         '{"sinus_rhythm": 1, "atrial_premature": 0, ...}\n\n'
-        "JSON输出："
+        'JSON输出：'
     )
 
 
