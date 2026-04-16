@@ -9,5 +9,5 @@ __pycache__/
 /results/
 /analyse/
 
-IDEA_REPORT.md
-NOVELTY_REPORT.md
+IDEA_REPORT*.md
+NOVELTY_REPORT*.md
