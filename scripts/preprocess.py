@@ -1,6 +1,7 @@
 """Preprocess raw Holter data into .npz files for training."""
 import os, sys, argparse, yaml, json, time
 import numpy as np
+from tqdm import tqdm
 from multiprocessing import Pool, cpu_count
 from functools import partial
 
@@ -102,9 +103,9 @@ def main():
 
     if args.workers > 0:
         with Pool(min(args.workers, cpu_count())) as pool:
-            results = pool.map(fn, patients)
+            results = list(tqdm(pool.imap(fn, patients), total=len(patients), desc="Preprocessing"))
     else:
-        results = [fn(r) for r in patients]
+        results = [fn(r) for r in tqdm(patients, desc="Preprocessing")]
 
     dt = time.time() - t0
     ok = [r for r in results if r["status"] == "ok"]
