@@ -72,7 +72,8 @@ if torch.cuda.is_available():
     _record("gpu_count", "PASS", n_gpu)
     for i in range(n_gpu):
         name = torch.cuda.get_device_name(i)
-        mem = torch.cuda.get_device_properties(i).total_mem / 1e9
+        props = torch.cuda.get_device_properties(i)
+        mem = getattr(props, 'total_memory', getattr(props, 'total_mem', 0)) / 1e9
         _record(f"gpu_{i}", "PASS", f"{name} | {mem:.1f} GB")
 
     dev = torch.device("cuda:0")
