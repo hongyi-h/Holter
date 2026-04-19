@@ -27,10 +27,10 @@
   "scheduler": {
     "type": "WarmupCosineLR",
     "params": {
-      "warmup_min_ratio": 0,
-      "warmup_max_lr": "auto",
+      "warmup_min_ratio": 0.0,
       "warmup_num_steps": "auto",
-      "total_num_steps": "auto"
+      "total_num_steps": "auto",
+      "cos_min_ratio": 0.0001
     }
   },
 
