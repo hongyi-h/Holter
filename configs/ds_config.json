@@ -35,7 +35,7 @@
   },
 
   "wandb": {
-    "enabled": true,
+    "enabled": false,
     "project": "holter-ssl",
     "group": "pretrain"
   },
