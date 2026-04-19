@@ -157,8 +157,14 @@ def main():
         t0 = time.time()
 
         for batch in loader:
-            batch_dev = {k: v.to(device) if isinstance(v, torch.Tensor) else v
-                         for k, v in batch.items()}
+            model_dtype = next(model_engine.parameters()).dtype
+            batch_dev = {}
+            for k, v in batch.items():
+                if isinstance(v, torch.Tensor):
+                    v = v.to(device)
+                    if v.is_floating_point():
+                        v = v.to(model_dtype)
+                batch_dev[k] = v
 
             outputs = model_engine(batch_dev)
 
