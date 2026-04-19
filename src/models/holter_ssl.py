@@ -88,21 +88,27 @@ class HolterSSL(nn.Module):
         for (_, b_o), (_, b_t) in zip(self.window_encoder.named_buffers(), self.target_window_encoder.named_buffers()):
             b_t.data.copy_(tau * b_t.data + (1 - tau) * b_o.data)
 
-    def encode_windows(self, beat_tensors, beat_masks, time_encodings, window_mask, use_target=False):
+    def encode_windows(self, beat_tensors, beat_masks, time_encodings, window_mask, use_target=False, return_beat_embeds=False):
         B, W, N, S, C = beat_tensors.shape
         be = self.target_beat_encoder if use_target else self.beat_encoder
         we = self.target_window_encoder if use_target else self.window_encoder
 
         # Process beats per-window to avoid OOM from flattening all B*W*N beats
         window_embeds = []
+        all_beat_embeds = [] if return_beat_embeds else None
         for wi in range(W):
             # (B, N, S, C) -> (B*N, S, C)
             beats_w = beat_tensors[:, wi].reshape(B * N, S, C)
             beat_emb_w = be(beats_w)  # (B*N, D)
             beat_emb_w = beat_emb_w.reshape(B, N, -1)  # (B, N, D)
+            if return_beat_embeds:
+                all_beat_embeds.append(beat_emb_w)
             w_emb = we(beat_emb_w, beat_masks[:, wi], time_encodings[:, wi])
             window_embeds.append(w_emb)
-        return torch.stack(window_embeds, dim=1)
+        window_out = torch.stack(window_embeds, dim=1)
+        if return_beat_embeds:
+            return window_out, torch.stack(all_beat_embeds, dim=1)  # (B,W,D), (B,W,N,D)
+        return window_out
 
     def _random_mask_beats(self, beat_tensors):
         B, W, N, S, C = beat_tensors.shape
@@ -121,15 +127,15 @@ class HolterSSL(nn.Module):
 
         if self.training:
             masked_beats, target_beats, beat_mask_recon = self._random_mask_beats(beat_tensors)
-            window_embeds = self.encode_windows(masked_beats, beat_masks, time_encodings, window_mask, use_target=False)
+            # return_beat_embeds=True so we can reuse for reconstruction (avoids 2nd OOM-prone pass)
+            window_embeds, beat_embeds = self.encode_windows(masked_beats, beat_masks, time_encodings, window_mask, use_target=False, return_beat_embeds=True)
             with torch.no_grad():
                 target_window_embeds = self.encode_windows(beat_tensors, beat_masks, time_encodings, window_mask, use_target=True)
             predictions = self.predictor(window_embeds)
             day_embed, window_outputs = self.day_encoder(window_embeds, window_mask)
             day_prediction = self.day_predictor(day_embed)
             B, W, N, S, C = beat_tensors.shape
-            beat_embeds_flat = self.beat_encoder(masked_beats.reshape(B*W*N, S, C))
-            recon_flat = self.recon_head(beat_embeds_flat)
+            recon_flat = self.recon_head(beat_embeds.reshape(B * W * N, -1))
             recon = recon_flat.reshape(B, W, N, S, C)
             return {
                 "window_embeds": window_embeds,
