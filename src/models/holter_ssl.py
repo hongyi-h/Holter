@@ -92,12 +92,15 @@ class HolterSSL(nn.Module):
         B, W, N, S, C = beat_tensors.shape
         be = self.target_beat_encoder if use_target else self.beat_encoder
         we = self.target_window_encoder if use_target else self.window_encoder
-        beats_flat = beat_tensors.reshape(B * W * N, S, C)
-        beat_embeds_flat = be(beats_flat)
-        beat_embeds = beat_embeds_flat.reshape(B, W, N, -1)
+
+        # Process beats per-window to avoid OOM from flattening all B*W*N beats
         window_embeds = []
         for wi in range(W):
-            w_emb = we(beat_embeds[:, wi], beat_masks[:, wi], time_encodings[:, wi])
+            # (B, N, S, C) -> (B*N, S, C)
+            beats_w = beat_tensors[:, wi].reshape(B * N, S, C)
+            beat_emb_w = be(beats_w)  # (B*N, D)
+            beat_emb_w = beat_emb_w.reshape(B, N, -1)  # (B, N, D)
+            w_emb = we(beat_emb_w, beat_masks[:, wi], time_encodings[:, wi])
             window_embeds.append(w_emb)
         return torch.stack(window_embeds, dim=1)
 
