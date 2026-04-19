@@ -32,13 +32,13 @@ class MaskedReconLoss(nn.Module):
             l_time = F.smooth_l1_loss(recon[valid_full], target[valid_full])
             recon_masked = recon[valid].reshape(-1, recon.shape[-2], recon.shape[-1])
             target_masked = target[valid].reshape(-1, target.shape[-2], target.shape[-1])
-            recon_spec = torch.fft.rfft(recon_masked, dim=-2).abs()
-            target_spec = torch.fft.rfft(target_masked, dim=-2).abs()
+            recon_spec = torch.fft.rfft(recon_masked.float(), dim=-2).abs()
+            target_spec = torch.fft.rfft(target_masked.float(), dim=-2).abs()
             l_spec = F.l1_loss(recon_spec, target_spec)
         else:
             l_time = F.smooth_l1_loss(recon, target)
-            recon_spec = torch.fft.rfft(recon, dim=-2).abs()
-            target_spec = torch.fft.rfft(target, dim=-2).abs()
+            recon_spec = torch.fft.rfft(recon.float(), dim=-2).abs()
+            target_spec = torch.fft.rfft(target.float(), dim=-2).abs()
             l_spec = F.l1_loss(recon_spec, target_spec)
 
         l_total = l_time + self.spectral_weight * l_spec
