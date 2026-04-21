@@ -13,3 +13,5 @@ IDEA_REPORT*.md
 NOVELTY_REPORT*.md
 
 notes/
+
+wandb/
