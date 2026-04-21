@@ -8,17 +8,37 @@ from torch.utils.data import Dataset
 class HolterPretrainDataset(Dataset):
     """Dataset for SSL pre-training. Loads processed .npz patient files."""
 
-    def __init__(self, processed_dir, mode="ordered", max_windows=288, max_beats=300):
+    def __init__(self, processed_dir, mode="ordered", max_windows=288,
+                 max_beats=300, subsample_beats=None):
         self.processed_dir = processed_dir
         self.mode = mode
         self.max_windows = max_windows
         self.max_beats = max_beats
+        self.subsample_beats = subsample_beats
         self.files = sorted(glob.glob(os.path.join(processed_dir, "*.npz")))
         if len(self.files) == 0:
             raise FileNotFoundError(f"No .npz files in {processed_dir}")
 
     def __len__(self):
         return len(self.files)
+
+    def _subsample_beats(self, beat_tensors, masks):
+        """Randomly subsample N beats per window from valid (non-padding) beats."""
+        W, N_orig, S, C = beat_tensors.shape
+        N_sub = self.subsample_beats
+        new_bt = np.zeros((W, N_sub, S, C), dtype=np.float32)
+        new_masks = np.zeros((W, N_sub), dtype=bool)
+        for w in range(W):
+            n_valid = int(masks[w].sum())
+            if n_valid == 0:
+                continue
+            if n_valid >= N_sub:
+                idx = np.sort(np.random.choice(n_valid, N_sub, replace=False))
+            else:
+                idx = np.arange(n_valid)
+            new_bt[w, :len(idx)] = beat_tensors[w, idx]
+            new_masks[w, :len(idx)] = True
+        return new_bt, new_masks
 
     def __getitem__(self, idx):
         data = np.load(self.files[idx], allow_pickle=True)
@@ -54,6 +74,10 @@ class HolterPretrainDataset(Dataset):
 
         # Window mask (all true up to W)
         window_mask = np.ones(W, dtype=bool)
+
+        # Subsample beats: randomly pick N from valid (non-padding) beats per window
+        if self.subsample_beats and self.subsample_beats < beat_tensors.shape[1]:
+            beat_tensors, masks = self._subsample_beats(beat_tensors, masks)
 
         return {
             "beat_tensors": torch.from_numpy(beat_tensors),

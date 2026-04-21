@@ -18,6 +18,8 @@ model:
   dropout: 0.1
   ema_tau: 0.996
   max_beats: 300
+  subsample_beats: 64
+  gradient_checkpoint: false
 
 loss:
   masked:

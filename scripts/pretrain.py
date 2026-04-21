@@ -50,6 +50,7 @@ def main():
         mode=model_cfg["mode"],
         max_windows=train_cfg.get("max_windows", 288),
         max_beats=model_cfg.get("max_beats", 300),
+        subsample_beats=model_cfg.get("subsample_beats", None),
     )
 
     # ---- Model ----
@@ -105,7 +106,7 @@ def main():
                                      rank=dist.get_rank(), shuffle=True,
                                      seed=train_cfg["seed"])
         loader = DataLoader(dataset, batch_size=train_cfg["batch_size"],
-                            sampler=sampler, collate_fn=collate_pretrain, num_workers=2,
+                            sampler=sampler, collate_fn=collate_pretrain, num_workers=4,
                             pin_memory=True)
     else:
         sampler = None

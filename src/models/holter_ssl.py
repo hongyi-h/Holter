@@ -17,6 +17,7 @@ class HolterSSL(nn.Module):
         self.mode = cfg.get("mode", "ordered")
         self.ema_tau = cfg.get("ema_tau", 0.996)
         self.mask_ratio = cfg.get("mask_ratio", 0.15)
+        self.gradient_checkpoint = cfg.get("gradient_checkpoint", False)
 
         beat_dim = cfg.get("beat_dim", 128)
         window_dim = cfg.get("window_dim", 256)
@@ -93,21 +94,31 @@ class HolterSSL(nn.Module):
         be = self.target_beat_encoder if use_target else self.beat_encoder
         we = self.target_window_encoder if use_target else self.window_encoder
 
-        # Process beats per-window to avoid OOM from flattening all B*W*N beats
-        window_embeds = []
-        all_beat_embeds = [] if return_beat_embeds else None
-        for wi in range(W):
-            # (B, N, S, C) -> (B*N, S, C)
-            beats_w = beat_tensors[:, wi].reshape(B * N, S, C)
-            beat_emb_w = be(beats_w)  # (B*N, D)
-            beat_emb_w = beat_emb_w.reshape(B, N, -1)  # (B, N, D)
-            if return_beat_embeds:
-                all_beat_embeds.append(beat_emb_w)
-            w_emb = we(beat_emb_w, beat_masks[:, wi], time_encodings[:, wi])
-            window_embeds.append(w_emb)
-        window_out = torch.stack(window_embeds, dim=1)
+        # Batch all beats at once: (B*W*N, S, C)
+        flat_beats = beat_tensors.reshape(B * W * N, S, C)
+
+        if self.training and not use_target and self.gradient_checkpoint:
+            flat_beat_emb = torch.utils.checkpoint.checkpoint(
+                be, flat_beats, use_reentrant=False
+            )
+        else:
+            flat_beat_emb = be(flat_beats)  # (B*W*N, D_beat)
+
+        # Window encoding: (B*W, N, D_beat) -> (B*W, D_w)
+        beat_emb = flat_beat_emb.reshape(B * W, N, -1)
+        flat_masks = beat_masks.reshape(B * W, N)
+        flat_time = time_encodings.reshape(B * W, -1)
+
+        if self.training and not use_target and self.gradient_checkpoint:
+            w_emb = torch.utils.checkpoint.checkpoint(
+                we, beat_emb, flat_masks, flat_time, use_reentrant=False
+            )
+        else:
+            w_emb = we(beat_emb, flat_masks, flat_time)
+
+        window_out = w_emb.reshape(B, W, -1)
         if return_beat_embeds:
-            return window_out, torch.stack(all_beat_embeds, dim=1)  # (B,W,D), (B,W,N,D)
+            return window_out, flat_beat_emb.reshape(B, W, N, -1)
         return window_out
 
     def _random_mask_beats(self, beat_tensors):

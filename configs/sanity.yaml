@@ -18,6 +18,8 @@ model:
   dropout: 0.1
   ema_tau: 0.996
   max_beats: 300
+  subsample_beats: 64
+  gradient_checkpoint: false
 
 loss:
   masked:
@@ -38,7 +40,7 @@ loss:
 
 training:
   epochs: 20
-  batch_size: 2
+  batch_size: 8
   lr: 0.0001
   warmup_steps: 50
   max_windows: 288
