@@ -1,0 +1,182 @@
+{
+  "data_dir": "data/DMS",
+  "output_dir": "reports/data_audit_sample_v2",
+  "n_records": 1,
+  "parse_errors": [],
+  "file_completeness": {
+    "rpoint_available": {
+      "count": 1,
+      "n": 1,
+      "rate": 1.0,
+      "ci_low": 0.20654329147389294,
+      "ci_high": 1.0
+    },
+    "dat_available": {
+      "count": 1,
+      "n": 1,
+      "rate": 1.0,
+      "ci_low": 0.20654329147389294,
+      "ci_high": 1.0
+    },
+    "dat_size_match": {
+      "count": 1,
+      "n": 1,
+      "rate": 1.0,
+      "ci_low": 0.20654329147389294,
+      "ci_high": 1.0
+    }
+  },
+  "beat_label_counts_global": {
+    "F": 8,
+    "N": 102100,
+    "V": 1827
+  },
+  "beat_label_record_prevalence": {
+    "F": {
+      "count": 1,
+      "n": 1,
+      "rate": 1.0,
+      "ci_low": 0.20654329147389294,
+      "ci_high": 1.0
+    },
+    "N": {
+      "count": 1,
+      "n": 1,
+      "rate": 1.0,
+      "ci_low": 0.20654329147389294,
+      "ci_high": 1.0
+    },
+    "V": {
+      "count": 1,
+      "n": 1,
+      "rate": 1.0,
+      "ci_low": 0.20654329147389294,
+      "ci_high": 1.0
+    }
+  },
+  "mismatch_summary": {
+    "csv_mean_hr_vs_rpoint_count": {
+      "count": 0,
+      "n": 1,
+      "rate": 0.0,
+      "ci_low": 0.0,
+      "ci_high": 0.7934567085261071
+    },
+    "csv_pvc_count_vs_rpoint": {
+      "count": 0,
+      "n": 1,
+      "rate": 0.0,
+      "ci_low": 0.0,
+      "ci_high": 0.7934567085261071
+    },
+    "csv_pvc_pct_vs_rpoint": {
+      "count": 0,
+      "n": 1,
+      "rate": 0.0,
+      "ci_low": 0.0,
+      "ci_high": 0.7934567085261071
+    },
+    "csv_svpc_count_vs_rpoint": {
+      "count": 0,
+      "n": 1,
+      "rate": 0.0,
+      "ci_low": 0.0,
+      "ci_high": 0.7934567085261071
+    },
+    "csv_svpc_pct_vs_rpoint": {
+      "count": 0,
+      "n": 1,
+      "rate": 0.0,
+      "ci_low": 0.0,
+      "ci_high": 0.7934567085261071
+    },
+    "csv_total_vs_rpoint_valid_total": {
+      "count": 0,
+      "n": 1,
+      "rate": 0.0,
+      "ci_low": 0.0,
+      "ci_high": 0.7934567085261071
+    },
+    "report_bigeminy_vs_rpoint": {
+      "count": 0,
+      "n": 1,
+      "rate": 0.0,
+      "ci_low": 0.0,
+      "ci_high": 0.7934567085261071
+    },
+    "report_longest_rr_vs_rpoint_nn": {
+      "count": 0,
+      "n": 1,
+      "rate": 0.0,
+      "ci_low": 0.0,
+      "ci_high": 0.7934567085261071
+    },
+    "report_max_hr_vs_csv": {
+      "count": 0,
+      "n": 1,
+      "rate": 0.0,
+      "ci_low": 0.0,
+      "ci_high": 0.7934567085261071
+    },
+    "report_mean_hr_vs_csv": {
+      "count": 0,
+      "n": 1,
+      "rate": 0.0,
+      "ci_low": 0.0,
+      "ci_high": 0.7934567085261071
+    },
+    "report_min_hr_vs_csv": {
+      "count": 0,
+      "n": 1,
+      "rate": 0.0,
+      "ci_low": 0.0,
+      "ci_high": 0.7934567085261071
+    },
+    "report_pvc_count_vs_csv": {
+      "count": 0,
+      "n": 1,
+      "rate": 0.0,
+      "ci_low": 0.0,
+      "ci_high": 0.7934567085261071
+    },
+    "report_total_beats_vs_csv": {
+      "count": 0,
+      "n": 1,
+      "rate": 0.0,
+      "ci_low": 0.0,
+      "ci_high": 0.7934567085261071
+    },
+    "report_trigeminy_vs_rpoint": {
+      "count": 0,
+      "n": 1,
+      "rate": 0.0,
+      "ci_low": 0.0,
+      "ci_high": 0.7934567085261071
+    }
+  },
+  "mismatch_total_rows": 0,
+  "report_template_placeholders": {
+    "count": 0,
+    "n": 1,
+    "rate": 0.0,
+    "ci_low": 0.0,
+    "ci_high": 0.7934567085261071
+  },
+  "config": {
+    "sample_rate": 128,
+    "n_channels_default": 3,
+    "pvc_labels": [
+      "V"
+    ],
+    "svpc_labels": [
+      "S"
+    ],
+    "exclude_total_labels": [
+      "F",
+      "FS"
+    ],
+    "pct_tolerance": 0.02,
+    "hr_tolerance": 1.0,
+    "rr_tolerance": 0.02
+  }
+}

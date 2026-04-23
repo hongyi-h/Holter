@@ -81,13 +81,16 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--svpc_labels",
-        default="S,A,J",
-        help="Comma-separated beat labels counted as SVPC/PAC. Default: S,A,J.",
+        default="S",
+        help=(
+            "Comma-separated beat labels counted as SVPC/PAC. Default: S. "
+            "Do not add A/AE/AP unless their DMS semantics are verified."
+        ),
     )
     parser.add_argument(
         "--exclude_total_labels",
-        default="F",
-        help="Comma-separated beat labels excluded from total beat count. Default: F.",
+        default="F,FS",
+        help="Comma-separated beat labels excluded from total beat count. Default: F,FS.",
     )
     parser.add_argument(
         "--pct_tolerance",
@@ -377,16 +380,20 @@ def extract_report_numbers(text: str) -> dict[str, Any]:
     result: dict[str, Any] = {}
     if not text:
         return result
+    if re.search(r"\[[A-Z_]+\]", text):
+        result["report_has_template_placeholders"] = 1
+        return result
+    result["report_has_template_placeholders"] = 0
 
     patterns = {
-        "report_total_beats": r"总心搏数[^\d]*(\d+)",
-        "report_mean_hr": r"平均心率[^\d]*(\d+)",
-        "report_max_hr": r"最快心率[^\d]*(\d+)",
-        "report_min_hr": r"最慢心率[^\d]*(\d+)",
-        "report_pvc_count": r"室性早搏[^\d]*(\d+)",
-        "report_svpc_count": r"(?:房性早搏|室上性早搏|房早|室上早)[^\d]*(\d+)",
-        "report_bigeminy_runs": r"室早二联律[^\d]*(\d+)",
-        "report_trigeminy_runs": r"室早三联律[^\d]*(\d+)",
+        "report_total_beats": r"分析的总心搏数为\s*(\d+)\s*个",
+        "report_mean_hr": r"平均心率\s*[：:]\s*(\d+)\s*bpm",
+        "report_max_hr": r"最快心率\s*[：:]\s*(\d+)\s*bpm",
+        "report_min_hr": r"最慢心率\s*[：:]\s*(\d+)\s*bpm",
+        "report_pvc_count": r"室性早搏\s*[：:]\s*(?:有)?\s*(\d+)\s*次",
+        "report_svpc_count": r"(?:房性早搏|室上性早搏)\s*[：:]\s*(?:有)?\s*(?:单个)?\s*(\d+)\s*次",
+        "report_bigeminy_runs": r"室早二联律\s*[：:]\s*(\d+)\s*阵",
+        "report_trigeminy_runs": r"室早三联律\s*[：:]\s*(\d+)\s*阵",
     }
     for key, pat in patterns.items():
         match = re.search(pat, text)
@@ -547,6 +554,7 @@ def main() -> None:
     global_label_counts: Counter[str] = Counter()
     record_label_presence: Counter[str] = Counter()
     parse_errors = []
+    report_template_placeholders = 0
 
     for rec in records:
         row: dict[str, Any] = {
@@ -582,6 +590,8 @@ def main() -> None:
 
             report_numbers = extract_report_numbers(summary.get("conclusion", ""))
             row.update(report_numbers)
+            if report_numbers.get("report_has_template_placeholders") == 1:
+                report_template_placeholders += 1
 
             if rec.rpoint_path.exists():
                 beats, bad_lines = read_rpoint_property(rec.rpoint_path)
@@ -805,6 +815,7 @@ def main() -> None:
         "beat_label_record_prevalence": record_label_summary,
         "mismatch_summary": mismatch_summary,
         "mismatch_total_rows": len(mismatches),
+        "report_template_placeholders": wilson_interval(report_template_placeholders, n_records),
         "config": {
             "sample_rate": SAMPLE_RATE,
             "n_channels_default": N_CHANNELS,
