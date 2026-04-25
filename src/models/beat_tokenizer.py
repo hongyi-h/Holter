@@ -65,7 +65,10 @@ class VQCodebook(nn.Module):
 
     def forward(self, z: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # z: (B, code_dim)
-        dist = (z.unsqueeze(1) - self.embedding.weight.unsqueeze(0)).pow(2).sum(-1)
+        # ||z - e||² = ||z||² + ||e||² - 2*z·eᵀ  (avoids O(N×K×D) intermediate)
+        dist = (z.pow(2).sum(-1, keepdim=True)
+                + self.embedding.weight.pow(2).sum(-1).unsqueeze(0)
+                - 2 * z @ self.embedding.weight.t())
         indices = dist.argmin(dim=-1)  # (B,)
         z_q = self.embedding(indices)
         # straight-through
