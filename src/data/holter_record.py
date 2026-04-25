@@ -67,15 +67,23 @@ class HolterRecord:
         )
 
     @classmethod
-    def discover(cls, data_dir: str | Path) -> list["HolterRecord"]:
+    def discover(cls, data_dir: str | Path, valid_list: str | Path | None = None) -> list["HolterRecord"]:
         data_dir = Path(data_dir)
+        valid_ids: set[str] | None = None
+        if valid_list is not None:
+            valid_list = Path(valid_list)
+            if valid_list.exists():
+                valid_ids = {line.strip() for line in valid_list.read_text().splitlines() if line.strip()}
         records = []
         for dat in sorted(data_dir.glob("*.dat")):
             if dat.name.startswith("._"):
                 continue
             rec = cls.from_dat_path(dat)
-            if rec.rpoint_path.exists():
-                records.append(rec)
+            if not rec.rpoint_path.exists():
+                continue
+            if valid_ids is not None and rec.record_id not in valid_ids:
+                continue
+            records.append(rec)
         return records
 
     # --- ECG waveform ---

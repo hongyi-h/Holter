@@ -72,6 +72,7 @@ def setup_distributed():
 def pretrain(
     data_dir: str,
     output_dir: str = "checkpoints",
+    valid_list: str | None = None,
     epochs: int = 40,
     batch_size: int = 1,
     lr: float = 2e-4,
@@ -83,7 +84,7 @@ def pretrain(
     num_workers: int = 4,
     resume_from: str | None = None,
 ):
-    rank, local_rank, world_size = setup_distributed()
+    _, local_rank, world_size = setup_distributed()
     device = torch.device(f"cuda:{local_rank}" if torch.cuda.is_available() else "cpu")
     use_ddp = world_size > 1
 
@@ -92,7 +93,7 @@ def pretrain(
         output_dir.mkdir(parents=True, exist_ok=True)
 
     # --- data ---
-    records = HolterRecord.discover(data_dir)
+    records = HolterRecord.discover(data_dir, valid_list=valid_list)
     log(f"Found {len(records)} recordings in {data_dir}")
     if len(records) == 0:
         raise ValueError(f"No recordings found in {data_dir}")
@@ -146,7 +147,6 @@ def pretrain(
     if use_ddp:
         model = DDP(model, device_ids=[local_rank], find_unused_parameters=True)
 
-    all_params = list(model.parameters()) + list(loss_fn.parameters())
     optimizer = build_optimizer(model, lr=lr)
     # also add loss_fn params that need optimization
     loss_params = [p for p in loss_fn.parameters() if p.requires_grad]
@@ -283,6 +283,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_dir", type=str, required=True)
     parser.add_argument("--output_dir", type=str, default="checkpoints")
+    parser.add_argument("--valid_list", type=str, default=None)
     parser.add_argument("--epochs", type=int, default=40)
     parser.add_argument("--batch_size", type=int, default=1)
     parser.add_argument("--lr", type=float, default=2e-4)
@@ -292,6 +293,7 @@ if __name__ == "__main__":
     pretrain(
         data_dir=args.data_dir,
         output_dir=args.output_dir,
+        valid_list=args.valid_list,
         epochs=args.epochs,
         batch_size=args.batch_size,
         lr=args.lr,
