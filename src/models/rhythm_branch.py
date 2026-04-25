@@ -6,6 +6,7 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.checkpoint import checkpoint as grad_checkpoint
 
 
 class MambaBlock(nn.Module):
@@ -81,23 +82,25 @@ class MambaBlock(nn.Module):
     def _scan_chunk(self, x: torch.Tensor, dt: torch.Tensor, A: torch.Tensor,
                     B: torch.Tensor, C: torch.Tensor) -> torch.Tensor:
         B_sz, T, d_inner = x.shape
+        # Precompute all timesteps at once — fewer autograd nodes
+        dA_all = torch.exp(dt.unsqueeze(-1) * A.unsqueeze(0).unsqueeze(0))  # (B, T, d_inner, d_state)
+        dBx_all = dt.unsqueeze(-1) * B.unsqueeze(2) * x.unsqueeze(-1)        # (B, T, d_inner, d_state)
         state = torch.zeros(B_sz, d_inner, self.d_state, device=x.device, dtype=x.dtype)
         outputs = []
         for t in range(T):
-            dA = torch.exp(dt[:, t].unsqueeze(-1) * A.unsqueeze(0))  # (B, d_inner, d_state)
-            dB = dt[:, t].unsqueeze(-1) * B[:, t].unsqueeze(1)       # (B, d_inner, d_state)
-            state = state * dA + dB * x[:, t].unsqueeze(-1)
-            y_t = (state * C[:, t].unsqueeze(1)).sum(dim=-1)          # (B, d_inner)
+            state = state * dA_all[:, t] + dBx_all[:, t]
+            y_t = (state * C[:, t].unsqueeze(1)).sum(dim=-1)                 # (B, d_inner)
             outputs.append(y_t)
         return torch.stack(outputs, dim=1)
 
     def _scan_chunk_stateful(self, x, dt, A, B, C, state):
         B_sz, T, d_inner = x.shape
+        # Precompute all timesteps at once — fewer autograd nodes
+        dA_all = torch.exp(dt.unsqueeze(-1) * A.unsqueeze(0).unsqueeze(0))  # (B, T, d_inner, d_state)
+        dBx_all = dt.unsqueeze(-1) * B.unsqueeze(2) * x.unsqueeze(-1)        # (B, T, d_inner, d_state)
         outputs = []
         for t in range(T):
-            dA = torch.exp(dt[:, t].unsqueeze(-1) * A.unsqueeze(0))
-            dB = dt[:, t].unsqueeze(-1) * B[:, t].unsqueeze(1)
-            state = state * dA + dB * x[:, t].unsqueeze(-1)
+            state = state * dA_all[:, t] + dBx_all[:, t]
             y_t = (state * C[:, t].unsqueeze(1)).sum(dim=-1)
             outputs.append(y_t)
         return torch.stack(outputs, dim=1), state
@@ -134,6 +137,7 @@ class RhythmBranch(nn.Module):
         n_layers: int = 8,
         d_conv: int = 4,
         episode_len: int = 64,
+        gradient_checkpointing: bool = True,
     ):
         super().__init__()
         self.d_model = d_model
@@ -148,6 +152,7 @@ class RhythmBranch(nn.Module):
         # project to d_model
         self.input_proj = nn.Linear(64 + 16 + 16 + 8, d_model)
 
+        self.gradient_checkpointing = gradient_checkpointing
         self.layers = nn.ModuleList([
             BiMamba(d_model, d_state, d_conv, expand=1) for _ in range(n_layers)
         ])
@@ -181,7 +186,10 @@ class RhythmBranch(nn.Module):
         x = self.input_proj(torch.cat([h_code, h_rr, h_rr_prev, h_clock], dim=-1))
 
         for layer in self.layers:
-            x = layer(x)
+            if self.gradient_checkpointing and x.requires_grad:
+                x = grad_checkpoint(layer, x, use_reentrant=False)
+            else:
+                x = layer(x)
         x = self.norm(x)
 
         # episode-level pooling
