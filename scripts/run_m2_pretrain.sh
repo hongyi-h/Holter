@@ -1,0 +1,39 @@
+#!/bin/bash
+# M2: HolterFM pretraining (R020)
+# Run on 8×A100 80GB
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+cd "$PROJECT_DIR"
+
+DATA_DIR="${DATA_DIR:-data/DMS}"
+OUTPUT_DIR="${OUTPUT_DIR:-checkpoints/pretrain}"
+EPOCHS="${EPOCHS:-40}"
+BATCH_SIZE="${BATCH_SIZE:-1}"
+LR="${LR:-2e-4}"
+NUM_WORKERS="${NUM_WORKERS:-4}"
+RESUME="${RESUME:-}"
+
+echo "=== M2: HolterFM Pretraining ==="
+echo "Data: $DATA_DIR"
+echo "Output: $OUTPUT_DIR"
+echo "Epochs: $EPOCHS, BS: $BATCH_SIZE, LR: $LR"
+echo ""
+
+RESUME_FLAG=""
+if [ -n "$RESUME" ]; then
+    RESUME_FLAG="--resume $RESUME"
+    echo "Resuming from: $RESUME"
+fi
+
+# Single-node multi-GPU via torchrun
+torchrun --nproc_per_node=8 --master_port=29500 \
+    src/training/pretrain.py \
+    --data_dir "$DATA_DIR" \
+    --output_dir "$OUTPUT_DIR" \
+    --epochs "$EPOCHS" \
+    --batch_size "$BATCH_SIZE" \
+    --lr "$LR" \
+    --num_workers "$NUM_WORKERS" \
+    $RESUME_FLAG

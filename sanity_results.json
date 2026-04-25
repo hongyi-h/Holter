@@ -1,0 +1,134 @@
+{
+  "r001": {
+    "pass": 1,
+    "fail": 0,
+    "errors": []
+  },
+  "r002": {
+    "pass": 1,
+    "fail": 0,
+    "errors": [],
+    "stats": [
+      {
+        "record": "202108120755_竺春芳_D07984510",
+        "v_ann": 1827,
+        "v_report": 1827,
+        "burden_ann": 1.76,
+        "burden_report": 1.76,
+        "match": true
+      }
+    ]
+  },
+  "r003": {
+    "total_reports": 1,
+    "n_concepts_defined": 19,
+    "n_concepts_valid": 0,
+    "valid_concepts": [],
+    "prevalence": {
+      "sinus_rhythm": {
+        "count": 1,
+        "pct": 100.0
+      },
+      "sinus_bradycardia": {
+        "count": 1,
+        "pct": 100.0
+      },
+      "sinus_tachycardia": {
+        "count": 1,
+        "pct": 100.0
+      },
+      "sinus_arrhythmia": {
+        "count": 1,
+        "pct": 100.0
+      },
+      "frequent_pvc": {
+        "count": 1,
+        "pct": 100.0
+      },
+      "pvc_bigeminy": {
+        "count": 1,
+        "pct": 100.0
+      },
+      "pvc_trigeminy": {
+        "count": 1,
+        "pct": 100.0
+      },
+      "pvc_present": {
+        "count": 1,
+        "pct": 100.0
+      },
+      "pause_long": {
+        "count": 1,
+        "pct": 100.0
+      },
+      "st_t_change": {
+        "count": 1,
+        "pct": 100.0
+      },
+      "st_t_normal": {
+        "count": 1,
+        "pct": 100.0
+      }
+    },
+    "examples": {
+      "sinus_rhythm": {
+        "matched": "窦性心律",
+        "record": "202108120755_竺春芳_D07984510"
+      },
+      "sinus_bradycardia": {
+        "matched": "窦性心动过缓",
+        "record": "202108120755_竺春芳_D07984510"
+      },
+      "sinus_tachycardia": {
+        "matched": "窦性心动过速",
+        "record": "202108120755_竺春芳_D07984510"
+      },
+      "sinus_arrhythmia": {
+        "matched": "窦不齐",
+        "record": "202108120755_竺春芳_D07984510"
+      },
+      "frequent_pvc": {
+        "matched": "室性早搏：有1827",
+        "record": "202108120755_竺春芳_D07984510"
+      },
+      "pvc_bigeminy": {
+        "matched": "室早二联律",
+        "record": "202108120755_竺春芳_D07984510"
+      },
+      "pvc_trigeminy": {
+        "matched": "室早三联律",
+        "record": "202108120755_竺春芳_D07984510"
+      },
+      "pvc_present": {
+        "matched": "室性早搏",
+        "record": "202108120755_竺春芳_D07984510"
+      },
+      "pause_long": {
+        "matched": "最长R-R",
+        "record": "202108120755_竺春芳_D07984510"
+      },
+      "st_t_change": {
+        "matched": "缺血型",
+        "record": "202108120755_竺春芳_D07984510"
+      },
+      "st_t_normal": {
+        "matched": "未见缺血型ST-T",
+        "record": "202108120755_竺春芳_D07984510"
+      }
+    }
+  },
+  "r004": {
+    "totals": {
+      "bigeminy": 12,
+      "trigeminy": 29,
+      "couplet": 0,
+      "v_run": 0,
+      "isolated_pvc": 1827
+    },
+    "n_records": 1,
+    "records_with_bigeminy": 1,
+    "records_with_trigeminy": 1,
+    "records_with_couplet": 0,
+    "records_with_v_run": 0
+  }
+}

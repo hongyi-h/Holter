@@ -1,0 +1,46 @@
+# Downstream evaluation configs
+
+beat_classification:
+  task: beat_classification
+  checkpoint: checkpoints/pretrain/holter_fm_best.pt
+  mode: linear_probe  # or fine_tune
+  epochs: 20
+  lr: 1.0e-3
+  lr_backbone: 5.0e-5  # only used in fine_tune mode
+  unfreeze_top_n: 2     # episode encoder layers to unfreeze in fine_tune
+  class_weights: [1.0, 20.0, 50.0]  # N, V, F (focal loss gamma=2)
+  focal_gamma: 2.0
+  batch_size: 8
+  seeds: [42, 123, 456]
+  metrics: [macro_f1, f1_V, f1_F, macro_auprc, balanced_accuracy]
+
+pvc_burden:
+  task: pvc_burden
+  checkpoint: checkpoints/pretrain/holter_fm_best.pt
+  mode: frozen  # or end_to_end
+  epochs: 100
+  lr: 1.0e-3
+  lr_backbone: 5.0e-5
+  batch_size: 64  # frozen features
+  early_stopping_patience: 15
+  metrics: [mae_burden, spearman_rho, r2, mae_log_count, auroc_1pct, auroc_5pct, auroc_10pct]
+
+report_concepts:
+  task: report_concepts
+  checkpoint: checkpoints/pretrain/holter_fm_best.pt
+  mode: frozen
+  epochs: 30
+  lr: 5.0e-4
+  lr_backbone: 5.0e-5
+  batch_size: 32
+  metrics: [macro_auroc, macro_auprc, micro_f1, per_label_auroc]
+
+ventricular_events:
+  task: ventricular_events
+  checkpoint: checkpoints/pretrain/holter_fm_best.pt
+  mode: frozen
+  epochs: 30
+  lr: 5.0e-4
+  batch_size: 32
+  onset_tolerance_beats: 5
+  metrics: [event_macro_f1, event_precision, event_recall, onset_mae_sec, record_auroc]
