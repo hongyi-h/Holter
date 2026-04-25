@@ -30,6 +30,7 @@ if [ -n "$RESUME" ]; then
 fi
 
 # Single-node multi-GPU via torchrun
+PYTHONPATH="$PROJECT_DIR${PYTHONPATH:+:$PYTHONPATH}" \
 torchrun --nproc_per_node=8 --master_port=29500 \
     src/training/pretrain.py \
     --data_dir "$DATA_DIR" \
