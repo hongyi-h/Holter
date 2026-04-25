@@ -11,7 +11,7 @@ echo "=== M0: Data Sanity Checks ==="
 echo "Data dir: ${DATA_DIR:-data/DMS}"
 echo ""
 
-conda run -n holter python scripts/sanity_check.py \
+python scripts/sanity_check.py \
     --data_dir "${DATA_DIR:-data/DMS}" \
     --output "sanity_results.json"
 
