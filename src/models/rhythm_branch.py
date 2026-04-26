@@ -26,7 +26,7 @@ class MambaBlock(nn.Module):
 
         # SSM parameters
         self.dt_proj = nn.Linear(d_inner, d_inner, bias=True)
-        self.A_log = nn.Parameter(torch.log(torch.arange(1, d_state + 1).float().unsqueeze(0).expand(d_inner, -1)))
+        self.A_log = nn.Parameter(torch.log(torch.arange(1, d_state + 1).float().unsqueeze(0).expand(d_inner, -1)).contiguous())
         self.D = nn.Parameter(torch.ones(d_inner))
         self.B_proj = nn.Linear(d_inner, d_state, bias=False)
         self.C_proj = nn.Linear(d_inner, d_state, bias=False)
