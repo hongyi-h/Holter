@@ -1,4 +1,4 @@
-(holter) root@pt-09152c2a4d654b7ca5bd34af6e5cb8b3-worker-0:/mnt/afs/zhengmingkai/hhy/Holter# python scripts/m0_fixes.py --data_dir data/DMS
+(holter) root@pt-caf0af288db34325b56284b19fe88d7f-worker-0:/mnt/afs/zhengmingkai/hhy/Holter# python scripts/m0_fixes.py --data_dir data/DMS
 Found 1178 recordings
 
 === Step 1: Record quality assessment ===
@@ -39,7 +39,7 @@ Found 1178 recordings
     [房速] 202108120942_刘霞飞_P23710816: ... 房性早搏：有956次（其中单个：921次；成对：2次；短阵房速：5阵）；                   通道:1(II)2(V1)3(V5)全程未见缺血...
 
 === Step 3: Concept prevalence (threshold 2-90%) ===
-  Valid concepts: 15
+  Valid concepts: 16
     sinus_rhythm               1142 ( 97.0%) — SKIP (too_high_97.0%)
     sinus_bradycardia          1035 ( 87.9%) — OK
     sinus_tachycardia           945 ( 80.3%) — OK
@@ -52,7 +52,7 @@ Found 1178 recordings
     pvc_present                 854 ( 72.6%) — OK
     frequent_pac                241 ( 20.5%) — OK
     pac_present                 978 ( 83.1%) — OK
-    svt_run                       0 (  0.0%) — SKIP (too_low_0.0%)
+    svt_run                     355 ( 30.2%) — OK
     atrial_fibrillation          55 (  4.7%) — OK
     pause_long                 1173 ( 99.7%) — SKIP (too_high_99.7%)
     av_block                      6 (  0.5%) — SKIP (too_low_0.5%)
@@ -65,6 +65,6 @@ Full report saved to m0_fixes_report.json
 ============================================================
 SUMMARY
   Records: 1170/1178 usable
-  Concepts: 15 valid (threshold 2-90%)
+  Concepts: 16 valid (threshold 2-90%)
   SVT patterns: 356 found
   Next: review m0_fixes_report.json, then proceed to M1

@@ -226,7 +226,7 @@
       "min_pct": 2.0,
       "max_pct": 90.0
     },
-    "n_valid": 15,
+    "n_valid": 16,
     "valid_concepts": [
       "sinus_bradycardia",
       "sinus_tachycardia",
@@ -239,6 +239,7 @@
       "pvc_present",
       "frequent_pac",
       "pac_present",
+      "svt_run",
       "atrial_fibrillation",
       "bundle_branch_block",
       "st_t_change",
@@ -318,10 +319,10 @@
         "reason": ""
       },
       "svt_run": {
-        "count": 0,
-        "pct": 0.0,
-        "valid": false,
-        "reason": "too_low_0.0%"
+        "count": 355,
+        "pct": 30.2,
+        "valid": true,
+        "reason": ""
       },
       "atrial_fibrillation": {
         "count": 55,

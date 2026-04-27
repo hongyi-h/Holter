@@ -14432,12 +14432,13 @@
   "r003": {
     "total_reports": 1177,
     "n_concepts_defined": 19,
-    "n_concepts_valid": 12,
+    "n_concepts_valid": 13,
     "valid_concepts": [
       "pvc_present",
       "st_t_change",
       "st_t_normal",
       "pvc_couplet",
+      "svt_run",
       "sinus_arrhythmia",
       "pvc_trigeminy",
       "frequent_pvc",
@@ -14483,6 +14484,10 @@
       "pvc_couplet": {
         "count": 453,
         "pct": 38.5
+      },
+      "svt_run": {
+        "count": 355,
+        "pct": 30.2
       },
       "sinus_arrhythmia": {
         "count": 344,
@@ -14576,6 +14581,10 @@
       },
       "frequent_pac": {
         "matched": "房性早搏：有173",
+        "record": "202108120810_陆林娟_P03609366"
+      },
+      "svt_run": {
+        "matched": "短阵房速",
         "record": "202108120810_陆林娟_P03609366"
       },
       "pvc_run": {

@@ -1,4 +1,4 @@
-(holter) root@pt-09152c2a4d654b7ca5bd34af6e5cb8b3-worker-0:/mnt/afs/zhengmingkai/hhy/Holter# bash scripts/run_m0_sanity.sh
+(holter) root@pt-caf0af288db34325b56284b19fe88d7f-worker-0:/mnt/afs/zhengmingkai/hhy/Holter# bash scripts/run_m0_sanity.sh
 === M0: Data Sanity Checks ===
 Data dir: data/DMS
 
@@ -8,11 +8,11 @@ Found 1178 recordings
 /mnt/afs/zhengmingkai/hhy/Holter/scripts/sanity_check.py:35: RuntimeWarning: divide by zero encountered in scalar divide
   mean_hr_computed = 60.0 / np.mean(rr)
   Pass: 901, Fail: 277
-  Error: {'record': '202108120804_青山山_140801001042330', 'beat_count': {'ann': 120014, 'report': 120008, 'ok': True}, 'mean_hr': {'computed': np.float64(83.5), 'report': 82, 'ok': np.True_}, 'duration': {'ann': 86399, 'report': 87600, 'ok': np.False_}}
-  Error: {'record': '202108120825_蒲欢_K26013614', 'beat_count': {'ann': 99165, 'report': 99109, 'ok': True}, 'mean_hr': {'computed': np.float64(69.0), 'report': 68, 'ok': np.True_}, 'duration': {'ann': 86399, 'report': 87000, 'ok': np.False_}}
-  Error: {'record': '202108120830_位茹月_140801001070134', 'beat_count': {'ann': 124301, 'report': 124293, 'ok': True}, 'mean_hr': {'computed': np.float64(90.0), 'report': 89, 'ok': np.True_}, 'duration': {'ann': 84181, 'report': 85200, 'ok': np.False_}}
-  Error: {'record': '202108120845_吴光辉_A14110422', 'beat_count': {'ann': 103818, 'report': 103814, 'ok': True}, 'mean_hr': {'computed': np.float64(77.1), 'report': 77, 'ok': np.True_}, 'duration': {'ann': 80881, 'report': 83880, 'ok': np.False_}}
-  Error: {'record': '202108120852_吕春凯_A504DE9B1', 'beat_count': {'ann': 90634, 'report': 90625, 'ok': True}, 'mean_hr': {'computed': np.float64(68.9), 'report': 68, 'ok': np.True_}, 'duration': {'ann': 79081, 'report': 83100, 'ok': np.False_}}
+  Error: {'record': '202108120804_青山山_140801001042330', 'beat_count': {'ann': 120014, 'report': 120008, 'ok': True}, 'mean_hr': {'computed': 83.5, 'report': 82, 'ok': True}, 'duration': {'ann': 86399, 'report': 87600, 'ok': False}}
+  Error: {'record': '202108120825_蒲欢_K26013614', 'beat_count': {'ann': 99165, 'report': 99109, 'ok': True}, 'mean_hr': {'computed': 69.0, 'report': 68, 'ok': True}, 'duration': {'ann': 86399, 'report': 87000, 'ok': False}}
+  Error: {'record': '202108120830_位茹月_140801001070134', 'beat_count': {'ann': 124301, 'report': 124293, 'ok': True}, 'mean_hr': {'computed': 90.0, 'report': 89, 'ok': True}, 'duration': {'ann': 84181, 'report': 85200, 'ok': False}}
+  Error: {'record': '202108120845_吴光辉_A14110422', 'beat_count': {'ann': 103818, 'report': 103814, 'ok': True}, 'mean_hr': {'computed': 77.1, 'report': 77, 'ok': True}, 'duration': {'ann': 80881, 'report': 83880, 'ok': False}}
+  Error: {'record': '202108120852_吕春凯_A504DE9B1', 'beat_count': {'ann': 90634, 'report': 90625, 'ok': True}, 'mean_hr': {'computed': 68.9, 'report': 68, 'ok': True}, 'duration': {'ann': 79081, 'report': 83100, 'ok': False}}
 
 === R002: PVC consistency ===
   Pass: 1177, Fail: 1
@@ -20,11 +20,12 @@ Found 1178 recordings
 
 === R003: Report concept ontology ===
   Total reports: 1177
-  Valid concepts (12):
+  Valid concepts (13):
     pvc_present: 854 (72.6%) — e.g. '室性早搏'
     st_t_change: 695 (59.0%) — e.g. '缺血型'
     st_t_normal: 657 (55.8%) — e.g. '未见缺血型ST-T'
     pvc_couplet: 453 (38.5%) — e.g. '成对'
+    svt_run: 355 (30.2%) — e.g. '短阵房速'
     sinus_arrhythmia: 344 (29.2%) — e.g. '窦不齐'
     pvc_trigeminy: 277 (23.5%) — e.g. '室早三联律'
     frequent_pvc: 261 (22.2%) — e.g. '室性早搏：有1827'
@@ -44,3 +45,4 @@ Results saved to sanity_results.json
 
 Results saved to sanity_results.json
 Review before proceeding to M1.
+
