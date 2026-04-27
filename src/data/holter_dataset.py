@@ -115,19 +115,19 @@ class HolterPretrainDataset(Dataset):
         if len(rr_nn) == 0:
             rr_nn = rr
 
-        mean_hr = 60.0 / max(np.mean(rr), 0.2)
-        min_hr = 60.0 / max(np.max(rr), 0.2)
-        max_hr = 60.0 / max(np.min(rr), 0.2)
+        mean_hr = 60.0 / max(np.mean(rr_real), 0.2)
+        min_hr = 60.0 / max(np.max(rr_real), 0.2)
+        max_hr = 60.0 / max(np.min(rr_real), 0.2)
         sdnn = np.std(rr_nn) * 1000 if len(rr_nn) > 1 else 0.0
         rmssd = np.sqrt(np.mean(np.diff(rr_nn) ** 2)) * 1000 if len(rr_nn) > 2 else 0.0
         total_beats = float(n)
         pvc_count = float(np.sum(labels == 1))
         pvc_burden = pvc_count / max(n, 1) * 100.0
-        longest_rr = float(np.max(rr)) if len(rr) > 0 else 0.0
+        longest_rr = float(np.max(rr_real)) if len(rr_real) > 0 else 0.0
 
         # bigeminy: NVNV pattern ≥ 6 beats
         bigeminy_count = 0.0
-        label_str = "".join(["N" if l == 0 else "V" if l == 1 else "F" for l in labels])
+        label_str = "".join(["N" if l == 0 else "V" if l == 1 else "F" if l == 2 else "X" for l in labels])
         import re
         bigeminy_count = float(len(re.findall(r"(?=NVNVNV)", label_str)))
 

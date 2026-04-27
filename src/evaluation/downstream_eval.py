@@ -11,7 +11,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
-from torch.cuda.amp import autocast
+from torch.amp import autocast
 
 from src.models.holter_fm import HolterFM
 from src.data.holter_dataset import HolterPretrainDataset, collate_holter

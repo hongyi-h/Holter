@@ -116,8 +116,10 @@ class HolterFM(nn.Module):
             hour_cos=batch["hour_cos"],
         )
 
-        # --- 4. Day encoder ---
+        # --- 4. Day encoder (with episode masking for pretraining) ---
         max_ep = max(batch["n_episodes"]).item()
+        ep_fused_targets = None
+        ep_mask = None
         if max_ep == 0:
             day_embed = torch.zeros(B, self.day_d_model, device=device)
             episode_ctx = None
@@ -133,6 +135,7 @@ class HolterFM(nn.Module):
             day_out = self.day_encoder(ep_wave, ep_rhythm)
             day_embed = day_out["day_embed"]
             episode_ctx = day_out["episode_ctx"]
+            ep_fused_targets = day_out.get("_fused_input")
 
         # --- 5. Beat-level representation ---
         beat_rhythm = rhythm_out["beat_rhythm"]  # (B, max_beats, 128)
@@ -151,6 +154,7 @@ class HolterFM(nn.Module):
             "code_idx": code_idx,             # (B, max_beats)
             "episode_tokens": all_episode_tokens,  # list of (n_ep, 384)
             "episode_ctx": episode_ctx,       # (B, max_ep, 512) or None
+            "ep_fused_targets": ep_fused_targets,  # (B, max_ep, 512) detached, for DayMaskLoss
             "beat_rhythm": beat_rhythm,       # (B, max_beats, 128)
             "day_embed": day_embed,           # (B, 512)
             "vq_loss": vq_loss,               # scalar

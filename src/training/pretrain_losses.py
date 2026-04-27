@@ -283,7 +283,7 @@ class RhythmMaskLoss(nn.Module):
         n_mask = int(T * self.mask_ratio)
         for b in range(B):
             masked = 0
-            valid_len = valid[b].sum().item()
+            valid_len = int(valid[b].sum().item())
             while masked < n_mask and masked < valid_len:
                 span = torch.randint(self.span_range[0], self.span_range[1] + 1, (1,)).item()
                 start = torch.randint(0, max(valid_len - span, 1), (1,)).item()
@@ -365,7 +365,22 @@ class HolterFMPretrainLoss(nn.Module):
         # day-level (ramp from 0 to full weight in first 5 epochs)
         ramp = min(epoch / 5.0, 1.0)
         losses["day_stats"] = self.day_stats(model_out["day_embed"], batch["day_stats"])
-        losses["day"] = losses["day_stats"]
+
+        # day mask loss: reconstruct masked episode tokens from day encoder output
+        ep_ctx = model_out["episode_ctx"]
+        ep_fused = model_out.get("ep_fused_targets")
+        if ep_ctx is not None and ep_fused is not None:
+            B_ep, N_ep, _ = ep_ctx.shape
+            day_mask = torch.rand(B_ep, N_ep, device=ep_ctx.device) < 0.15
+            # don't mask padded episodes
+            for b in range(B_ep):
+                ne = batch["n_episodes"][b].item()
+                day_mask[b, ne:] = False
+            losses["day_mask"] = self.day_mask(ep_ctx, ep_fused, day_mask)
+        else:
+            losses["day_mask"] = torch.tensor(0.0, device=batch["windows"].device)
+
+        losses["day"] = losses["day_mask"] + 0.5 * losses["day_stats"]
 
         # report (if available)
         if "concept_labels" in batch:

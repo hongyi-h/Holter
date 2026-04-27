@@ -31,14 +31,12 @@ class DayEncoder(nn.Module):
         self.d_model = d_model
         self.n_summary_tokens = n_summary_tokens
 
-        # fuse waveform episode + rhythm episode
         self.fusion = nn.Sequential(
             nn.Linear(episode_waveform_dim + episode_rhythm_dim, d_model),
             nn.GELU(),
             nn.Linear(d_model, d_model),
         )
 
-        # learned summary tokens
         self.summary_tokens = nn.Parameter(torch.randn(1, n_summary_tokens, d_model) * 0.02)
 
         self.layers = nn.ModuleList([
@@ -46,7 +44,6 @@ class DayEncoder(nn.Module):
         ])
         self.norm = nn.LayerNorm(d_model)
 
-        # attentive pooling for day embedding
         self.day_attn = nn.Linear(d_model, 1)
 
     def forward(
@@ -68,20 +65,20 @@ class DayEncoder(nn.Module):
         z = self.fusion(torch.cat([episode_waveform, episode_rhythm], dim=-1))
 
         summary = self.summary_tokens.expand(B, -1, -1)
-        x = torch.cat([summary, z], dim=1)  # (B, n_summary + n_ep, 512)
+        x = torch.cat([summary, z], dim=1)
 
         for layer in self.layers:
             x = layer(x)
         x = self.norm(x)
 
-        episode_ctx = x[:, self.n_summary_tokens:]  # (B, n_ep, 512)
+        episode_ctx = x[:, self.n_summary_tokens:]
 
-        # day embedding: attentive pool over all tokens
-        w = self.day_attn(x).squeeze(-1)  # (B, n_summary + n_ep)
+        w = self.day_attn(x).squeeze(-1)
         w = F.softmax(w, dim=-1).unsqueeze(-1)
-        day_embed = (x * w).sum(dim=1)  # (B, 512)
+        day_embed = (x * w).sum(dim=1)
 
         return {
             "day_embed": day_embed,
             "episode_ctx": episode_ctx,
+            "_fused_input": z.detach(),
         }
