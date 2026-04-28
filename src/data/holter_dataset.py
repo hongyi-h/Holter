@@ -111,13 +111,24 @@ class HolterPretrainDataset(Dataset):
     def _compute_day_stats(times: np.ndarray, labels: np.ndarray, rr: np.ndarray) -> np.ndarray:
         n = len(times)
         rr_real = rr[:-1]  # exclude the duplicated last element
-        rr_nn = rr_real[(labels[:-1] == 0) & (labels[1:] == 0)] if n > 1 else rr_real
+        # filter out annotation gaps and artifacts ([0.2s, 3.0s] = 20-300 bpm)
+        phys_mask = (rr_real >= 0.2) & (rr_real <= 3.0)
+        rr_phys = rr_real[phys_mask]
+        if len(rr_phys) == 0:
+            rr_phys = rr_real
+            phys_mask = np.ones(len(rr_real), dtype=bool)
+        # NN intervals: both adjacent beats are normal AND RR is physiological
+        if n > 1:
+            nn_mask = phys_mask & (labels[:-1] == 0) & (labels[1:] == 0)
+            rr_nn = rr_real[nn_mask]
+        else:
+            rr_nn = rr_phys
         if len(rr_nn) == 0:
-            rr_nn = rr
+            rr_nn = rr_phys
 
-        mean_hr = 60.0 / max(np.mean(rr_real), 0.2)
-        min_hr = 60.0 / max(np.max(rr_real), 0.2)
-        max_hr = 60.0 / max(np.min(rr_real), 0.2)
+        mean_hr = 60.0 / max(np.mean(rr_phys), 0.2)
+        min_hr = 60.0 / max(np.max(rr_phys), 0.2)
+        max_hr = 60.0 / max(np.min(rr_phys), 0.2)
         sdnn = np.std(rr_nn) * 1000 if len(rr_nn) > 1 else 0.0
         rmssd = np.sqrt(np.mean(np.diff(rr_nn) ** 2)) * 1000 if len(rr_nn) > 2 else 0.0
         total_beats = float(n)
