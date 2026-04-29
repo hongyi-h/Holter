@@ -1,20 +1,59 @@
-"""Day encoder: 12-layer BiMamba over ~1,563 episode tokens → day-level representation."""
+"""Day encoder: 12-layer Transformer over ~1,563 episode tokens → day-level representation.
+
+Uses standard multi-head self-attention with full global context. At 1,563 tokens
+the attention matrix is ~2.4M elements — trivial for modern GPUs. Global attention
+directly supports the paper's core claim that 24h temporal relationships matter.
+"""
 
 from __future__ import annotations
 
+import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .rhythm_branch import BiMamba
+
+class DayTransformerLayer(nn.Module):
+    def __init__(self, d_model: int = 512, n_heads: int = 8, mlp_ratio: int = 4, dropout: float = 0.1):
+        super().__init__()
+        self.n_heads = n_heads
+        self.head_dim = d_model // n_heads
+
+        self.norm1 = nn.LayerNorm(d_model)
+        self.qkv = nn.Linear(d_model, 3 * d_model)
+        self.out_proj = nn.Linear(d_model, d_model)
+        self.attn_drop = nn.Dropout(dropout)
+
+        self.norm2 = nn.LayerNorm(d_model)
+        self.mlp = nn.Sequential(
+            nn.Linear(d_model, d_model * mlp_ratio),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(d_model * mlp_ratio, d_model),
+            nn.Dropout(dropout),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        B, T, D = x.shape
+        h = self.norm1(x)
+        qkv = self.qkv(h).reshape(B, T, 3, self.n_heads, self.head_dim).permute(2, 0, 3, 1, 4)
+        q, k, v = qkv[0], qkv[1], qkv[2]
+
+        attn = F.scaled_dot_product_attention(
+            q, k, v,
+            dropout_p=self.attn_drop.p if self.training else 0.0,
+        )
+        attn = attn.transpose(1, 2).reshape(B, T, D)
+        x = x + self.out_proj(attn)
+        x = x + self.mlp(self.norm2(x))
+        return x
 
 
 class DayEncoder(nn.Module):
-    """12-layer BiMamba over fused episode tokens.
+    """12-layer Transformer over fused episode tokens.
 
-    Input: (B, n_episodes, 512) fused episode tokens
-    Output: day embedding (B, 512) + contextualized episode states (B, n_episodes, 512)
-    ~24.8M parameters (including fusion MLPs and task projections).
+    Input: episode_waveform (B, n_ep, 384) + episode_rhythm (B, n_ep, 128)
+    Output: day embedding (B, 512) + contextualized episode states (B, n_ep, 512)
     """
 
     def __init__(
@@ -22,29 +61,47 @@ class DayEncoder(nn.Module):
         episode_waveform_dim: int = 384,
         episode_rhythm_dim: int = 128,
         d_model: int = 512,
-        d_state: int = 64,
         n_layers: int = 12,
-        d_conv: int = 4,
+        n_heads: int = 8,
+        mlp_ratio: int = 4,
+        dropout: float = 0.1,
+        max_episodes: int = 2048,
         n_summary_tokens: int = 4,
     ):
         super().__init__()
         self.d_model = d_model
         self.n_summary_tokens = n_summary_tokens
 
+        # fuse waveform + rhythm episode tokens
         self.fusion = nn.Sequential(
             nn.Linear(episode_waveform_dim + episode_rhythm_dim, d_model),
             nn.GELU(),
             nn.Linear(d_model, d_model),
         )
 
+        # learned summary tokens (like CLS)
         self.summary_tokens = nn.Parameter(torch.randn(1, n_summary_tokens, d_model) * 0.02)
 
+        # sinusoidal position encoding for temporal structure
+        self.pos_embed = nn.Parameter(torch.zeros(1, max_episodes + n_summary_tokens, d_model))
+        self._init_pos_embed(max_episodes + n_summary_tokens, d_model)
+
         self.layers = nn.ModuleList([
-            BiMamba(d_model, d_state, d_conv, expand=1) for _ in range(n_layers)
+            DayTransformerLayer(d_model, n_heads, mlp_ratio, dropout)
+            for _ in range(n_layers)
         ])
         self.norm = nn.LayerNorm(d_model)
 
+        # attentive pooling for day embedding
         self.day_attn = nn.Linear(d_model, 1)
+
+    def _init_pos_embed(self, max_len: int, d_model: int):
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        self.pos_embed.data.copy_(pe.unsqueeze(0))
 
     def forward(
         self,
@@ -59,23 +116,29 @@ class DayEncoder(nn.Module):
         Returns:
             day_embed: (B, 512)
             episode_ctx: (B, n_ep, 512)
+            _fused_input: (B, n_ep, 512) detached, for DayMaskLoss
         """
         B, n_ep, _ = episode_waveform.shape
 
         z = self.fusion(torch.cat([episode_waveform, episode_rhythm], dim=-1))
 
         summary = self.summary_tokens.expand(B, -1, -1)
-        x = torch.cat([summary, z], dim=1)
+        x = torch.cat([summary, z], dim=1)  # (B, n_summary + n_ep, 512)
+
+        # add positional encoding
+        seq_len = x.shape[1]
+        x = x + self.pos_embed[:, :seq_len]
 
         for layer in self.layers:
             x = layer(x)
         x = self.norm(x)
 
-        episode_ctx = x[:, self.n_summary_tokens:]
+        episode_ctx = x[:, self.n_summary_tokens:]  # (B, n_ep, 512)
 
-        w = self.day_attn(x).squeeze(-1)
-        w = F.softmax(w, dim=-1).unsqueeze(-1)
-        day_embed = (x * w).sum(dim=1)
+        # day embedding: attentive pool over all tokens
+        w = self.day_attn(x).squeeze(-1)  # (B, seq_len)
+        w = F.softmax(w, dim=-1).unsqueeze(-1)  # (B, seq_len, 1)
+        day_embed = (x * w).sum(dim=1)  # (B, 512)
 
         return {
             "day_embed": day_embed,

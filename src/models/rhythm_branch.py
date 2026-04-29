@@ -1,7 +1,11 @@
-"""Rhythm branch: bidirectional Mamba over beat-level rhythm tokens (~100k/day).
+"""Rhythm branch: episode-local processing of beat-level rhythm tokens.
 
-Uses official mamba-ssm Mamba2 on CUDA, falls back to a pure-PyTorch
-minimal SSM on MPS / CPU for local development.
+Each 64-beat episode is processed independently — no cross-episode sequence modeling.
+This is physiologically justified: rhythm context (coupling intervals, short-term HRV,
+ectopy patterns) operates at the ±5 beat to 5-minute scale, all within one episode.
+
+Circadian context is provided by hour_sin/hour_cos input features and by the
+DayEncoder's global attention over episode tokens.
 """
 
 from __future__ import annotations
@@ -10,173 +14,44 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-# ---------------------------------------------------------------------------
-# Backend selection: official mamba-ssm (CUDA) vs pure-PyTorch fallback (MPS/CPU)
-# ---------------------------------------------------------------------------
-HAS_MAMBA_SSM = False
-_OfficialMamba = None
 
-try:
-    from mamba_ssm.modules.mamba2 import Mamba2 as _OfficialMamba
-    HAS_MAMBA_SSM = True
-except (ImportError, ModuleNotFoundError):
-    pass
+class RhythmBlock(nn.Module):
+    """Pre-norm feed-forward block with 1D local convolution for rhythm tokens."""
 
-if not HAS_MAMBA_SSM:
-    try:
-        from mamba_ssm import Mamba2 as _OfficialMamba
-        HAS_MAMBA_SSM = True
-    except (ImportError, ModuleNotFoundError):
-        pass
-
-if not HAS_MAMBA_SSM:
-    try:
-        from mamba_ssm import Mamba as _OfficialMamba
-        HAS_MAMBA_SSM = True
-    except (ImportError, ModuleNotFoundError):
-        pass
-
-if not HAS_MAMBA_SSM:
-    try:
-        from mamba_ssm.modules.mamba_simple import Mamba as _OfficialMamba
-        HAS_MAMBA_SSM = True
-    except (ImportError, ModuleNotFoundError):
-        pass
-
-import warnings
-if not HAS_MAMBA_SSM:
-    warnings.warn(
-        "mamba-ssm not found — using pure-PyTorch fallback SSM. "
-        "This is NOT suitable for training on long sequences (>1k tokens). "
-        "Install mamba-ssm: pip install mamba-ssm",
-        stacklevel=2,
-    )
-
-
-class _FallbackMamba(nn.Module):
-    """Minimal selective-SSM for MPS/CPU development. NOT for training."""
-
-    def __init__(self, d_model: int, d_state: int = 64, d_conv: int = 4, expand: int = 2):
+    def __init__(self, d_model: int = 128, kernel_size: int = 7, mlp_ratio: int = 2):
         super().__init__()
-        d_inner = d_model * expand
-        self.d_inner = d_inner
-        self.d_state = d_state
-
-        self.in_proj = nn.Linear(d_model, d_inner * 2, bias=False)
-        self.conv = nn.Conv1d(d_inner, d_inner, d_conv, padding=d_conv - 1, groups=d_inner)
-        self.dt_proj = nn.Linear(d_inner, d_inner, bias=True)
-        self.A_log = nn.Parameter(
-            torch.log(torch.arange(1, d_state + 1).float().unsqueeze(0).expand(d_inner, -1)).contiguous()
+        self.norm1 = nn.LayerNorm(d_model)
+        self.conv = nn.Conv1d(
+            d_model, d_model, kernel_size,
+            padding=kernel_size // 2, groups=d_model,
         )
-        self.D = nn.Parameter(torch.ones(d_inner))
-        self.B_proj = nn.Linear(d_inner, d_state, bias=False)
-        self.C_proj = nn.Linear(d_inner, d_state, bias=False)
-        self.out_proj = nn.Linear(d_inner, d_model, bias=False)
+        self.proj = nn.Linear(d_model, d_model)
+
+        self.norm2 = nn.LayerNorm(d_model)
+        self.mlp = nn.Sequential(
+            nn.Linear(d_model, d_model * mlp_ratio),
+            nn.GELU(),
+            nn.Linear(d_model * mlp_ratio, d_model),
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        B, T, D = x.shape
-        xz = self.in_proj(x)
-        x_ssm, z = xz.chunk(2, dim=-1)
-
-        x_ssm = x_ssm.transpose(1, 2)
-        x_ssm = self.conv(x_ssm)[:, :, :T]
-        x_ssm = x_ssm.transpose(1, 2)
-        x_ssm = F.silu(x_ssm)
-
-        dt = F.softplus(self.dt_proj(x_ssm))
-        A = -torch.exp(self.A_log)
-        B_t = self.B_proj(x_ssm)
-        C_t = self.C_proj(x_ssm)
-
-        y = self._scan(x_ssm, dt, A, B_t, C_t)
-        y = y + x_ssm * self.D.unsqueeze(0).unsqueeze(0)
-        y = y * F.silu(z)
-        return self.out_proj(y)
-
-    def _scan(self, x, dt, A, B, C):
-        B_sz, T, d_inner = x.shape
-        state = torch.zeros(B_sz, d_inner, self.d_state, device=x.device, dtype=x.dtype)
-        outputs = []
-        for t in range(T):
-            dA = torch.exp(dt[:, t].unsqueeze(-1) * A.unsqueeze(0))
-            dB = dt[:, t].unsqueeze(-1) * B[:, t].unsqueeze(1)
-            state = state * dA + dB * x[:, t].unsqueeze(-1)
-            y_t = (state * C[:, t].unsqueeze(1)).sum(dim=-1)
-            outputs.append(y_t)
-        return torch.stack(outputs, dim=1)
+        # x: (B, T, D)
+        h = self.norm1(x)
+        h = h.transpose(1, 2)  # (B, D, T)
+        h = self.conv(h).transpose(1, 2)  # (B, T, D)
+        x = x + self.proj(F.gelu(h))
+        x = x + self.mlp(self.norm2(x))
+        return x
 
 
-def _make_mamba_inner(d_model: int, d_state: int = 64, d_conv: int = 4, expand: int = 2) -> nn.Module:
-    """Create a single-direction Mamba layer, choosing backend by availability."""
-    if HAS_MAMBA_SSM and torch.cuda.is_available():
-        try:
-            # Try Mamba2 first (needs headdim, d_model*expand must be divisible)
-            d_inner = d_model * expand
-            headdim = min(64, d_inner)
-            if d_inner % headdim == 0:
-                return _OfficialMamba(
-                    d_model=d_model,
-                    d_state=d_state,
-                    d_conv=d_conv,
-                    expand=expand,
-                    headdim=headdim,
-                )
-        except TypeError:
-            pass
-        # Mamba1 doesn't have headdim
-        try:
-            return _OfficialMamba(
-                d_model=d_model,
-                d_state=d_state,
-                d_conv=d_conv,
-                expand=expand,
-            )
-        except Exception as e:
-            warnings.warn(f"Failed to create official Mamba: {e}. Using fallback.")
-    return _FallbackMamba(d_model, d_state, d_conv, expand)
-
-
-# ---------------------------------------------------------------------------
-# MambaBlock: norm + Mamba + residual
-# ---------------------------------------------------------------------------
-class MambaBlock(nn.Module):
-    """Pre-norm Mamba block with residual connection."""
-
-    def __init__(self, d_model: int, d_state: int = 64, d_conv: int = 4, expand: int = 2):
-        super().__init__()
-        self.norm = nn.LayerNorm(d_model)
-        self.mamba = _make_mamba_inner(d_model, d_state, d_conv, expand)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return x + self.mamba(self.norm(x))
-
-
-# ---------------------------------------------------------------------------
-# BiMamba: bidirectional wrapper
-# ---------------------------------------------------------------------------
-class BiMamba(nn.Module):
-    """Bidirectional Mamba: forward + backward SSM with gated fusion."""
-
-    def __init__(self, d_model: int, d_state: int = 64, d_conv: int = 4, expand: int = 2):
-        super().__init__()
-        self.fwd = MambaBlock(d_model, d_state, d_conv, expand)
-        self.bwd = MambaBlock(d_model, d_state, d_conv, expand)
-        self.gate = nn.Linear(d_model * 2, d_model)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        h_fwd = self.fwd(x)
-        h_bwd = self.bwd(x.flip(1)).flip(1)
-        return self.gate(torch.cat([h_fwd, h_bwd], dim=-1))
-
-
-# ---------------------------------------------------------------------------
-# RhythmBranch
-# ---------------------------------------------------------------------------
 class RhythmBranch(nn.Module):
-    """8-layer BiMamba over rhythm tokens (VQ code + RR bins + clock features).
+    """Episode-local rhythm encoder: processes each 64-beat episode independently.
 
-    Processes ~100k beat-level tokens per day.
-    ~4.6M parameters.
+    Input: rhythm tokens (VQ code + RR bins + clock features) for the full day
+    Processing: reshape into episodes, encode each independently with local conv + MLP
+    Output: per-beat rhythm states + per-episode rhythm summary
+
+    ~0.8M parameters.
     """
 
     def __init__(
@@ -184,26 +59,31 @@ class RhythmBranch(nn.Module):
         n_codes: int = 512,
         n_rr_bins: int = 32,
         d_model: int = 128,
-        d_state: int = 64,
-        n_layers: int = 8,
-        d_conv: int = 4,
+        n_layers: int = 4,
+        kernel_size: int = 7,
         episode_len: int = 64,
     ):
         super().__init__()
         self.d_model = d_model
         self.episode_len = episode_len
 
+        # token embeddings
         self.code_embed = nn.Embedding(n_codes, 64)
         self.rr_embed = nn.Embedding(n_rr_bins, 16)
         self.rr_prev_embed = nn.Embedding(n_rr_bins, 16)
         self.clock_proj = nn.Linear(2, 8)
 
+        # project to d_model
         self.input_proj = nn.Linear(64 + 16 + 16 + 8, d_model)
 
+        # episode-local layers (each episode processed independently)
         self.layers = nn.ModuleList([
-            BiMamba(d_model, d_state, d_conv, expand=1) for _ in range(n_layers)
+            RhythmBlock(d_model, kernel_size) for _ in range(n_layers)
         ])
         self.norm = nn.LayerNorm(d_model)
+
+        # episode summary: attentive pooling over 64 beats
+        self.ep_attn = nn.Linear(d_model, 1)
 
     def forward(
         self,
@@ -214,23 +94,57 @@ class RhythmBranch(nn.Module):
         hour_cos: torch.Tensor,
         n_beats: int | None = None,
     ) -> dict[str, torch.Tensor]:
+        """
+        Args:
+            code_idx: (B, max_beats) VQ code indices
+            rr_bins: (B, max_beats) quantized RR interval
+            rr_prev_bins: (B, max_beats) quantized previous RR
+            hour_sin/cos: (B, max_beats) clock features
+
+        Returns:
+            beat_rhythm: (B, max_beats, 128) per-beat rhythm states
+            episode_rhythm: (B, n_ep, 128) per-episode rhythm summaries
+        """
+        B, T = code_idx.shape
+
+        # embed rhythm tokens
         h_code = self.code_embed(code_idx)
         h_rr = self.rr_embed(rr_bins)
         h_rr_prev = self.rr_prev_embed(rr_prev_bins)
         h_clock = self.clock_proj(torch.stack([hour_sin, hour_cos], dim=-1))
 
         x = self.input_proj(torch.cat([h_code, h_rr, h_rr_prev, h_clock], dim=-1))
+        # x: (B, T, d_model)
 
-        for layer in self.layers:
-            x = layer(x)
-        x = self.norm(x)
+        # reshape into episodes for local processing
+        ep_len = self.episode_len
+        n_ep = T // ep_len
+        ep_beats = n_ep * ep_len
 
-        B, T, D = x.shape
-        n_ep = T // self.episode_len
-        ep_len = n_ep * self.episode_len
-        ep_rhythm = x[:, :ep_len].reshape(B, n_ep, self.episode_len, D).mean(dim=2)
+        if n_ep > 0:
+            # (B, n_ep, ep_len, d_model)
+            x_ep = x[:, :ep_beats].reshape(B * n_ep, ep_len, self.d_model)
+
+            for layer in self.layers:
+                x_ep = layer(x_ep)
+            x_ep = self.norm(x_ep)
+
+            # reshape back
+            x_ep = x_ep.reshape(B, n_ep, ep_len, self.d_model)
+
+            # write back to full sequence
+            x_out = x.clone()
+            x_out[:, :ep_beats] = x_ep.reshape(B, ep_beats, self.d_model)
+
+            # episode summary via attentive pooling
+            w = self.ep_attn(x_ep).squeeze(-1)  # (B, n_ep, ep_len)
+            w = F.softmax(w, dim=-1).unsqueeze(-1)  # (B, n_ep, ep_len, 1)
+            ep_rhythm = (x_ep * w).sum(dim=2)  # (B, n_ep, d_model)
+        else:
+            x_out = x
+            ep_rhythm = torch.zeros(B, 0, self.d_model, device=x.device)
 
         return {
-            "beat_rhythm": x,
-            "episode_rhythm": ep_rhythm,
+            "beat_rhythm": x_out,       # (B, T, 128)
+            "episode_rhythm": ep_rhythm, # (B, n_ep, 128)
         }

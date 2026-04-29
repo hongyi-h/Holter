@@ -46,80 +46,101 @@
 
 ## 2. 技术方案
 
-### 2.1 模型架构：层次化Transformer
+### 2.1 模型架构：Beat-Synchronous Hierarchical Encoder
 
-24h ECG = 2880个30秒片段，直接用flat Transformer序列太长。采用两级层次结构：
+核心设计原则：**局部形态在拍/episode尺度处理，全天时序关系通过全局注意力建模。**
 
 ```
-Level 1 (局部编码器): 5秒patch → 5分钟窗口表征
-  输入: 5秒 × 128Hz × 3ch = 1920维向量
-  序列长度: 60 patches per 5-min window
-  输出: 每个5分钟窗口一个d维表征向量
+Level 0 (Beat Tokenizer): R-peak对齐的80样本窗口 → 256-d beat embedding + VQ code
+  输入: 80 samples × 3ch (625ms, 以R波为中心)
+  架构: Conv1d stem + 4 ResBlocks + SE + AttentivePool + VQ codebook (512 codes)
+  输出: 连续embedding h_i ∈ R^256 + 离散形态码 c_i ∈ {1..512}
+  参数: ~1.1M
 
-Level 2 (全局编码器): 5分钟窗口表征 → 24h全局表征
-  输入: Level 1输出的d维向量
-  序列长度: 288 windows per 24h
-  输出: 24h全局表征 + 每个窗口的上下文化表征
+Level 1 (Episode Encoder): 64拍 → episode token
+  输入: 64个beat embeddings (约38-64秒)
+  架构: 6层Transformer, d=384, 6头, RoPE, CLS token
+  输出: 上下文化beat states (64, 384) + episode token (384,)
+  参数: ~10.7M
+
+Level 1b (Rhythm Branch): 64拍节律特征 → episode rhythm token
+  输入: VQ code + RR bins + clock features, 每episode独立处理
+  架构: 4层 local-conv + MLP blocks (kernel=7), attentive pooling
+  输出: per-beat rhythm state (128,) + episode rhythm summary (128,)
+  参数: ~0.8M
+  设计理由: 节律上下文（耦合间期、HRV、ectopy模式）在±64拍内完备，
+            不需要跨episode的全天序列建模。昼夜信息由clock features提供。
+
+Level 2 (Day Encoder): ~1,563 episode tokens → 24h全局表征
+  输入: fused episode tokens [waveform_ep; rhythm_ep] → 512-d
+  架构: 12层标准Transformer, d=512, 8头, sinusoidal位置编码
+  序列长度: ~1,563 (标准注意力完全可行: 1563² ≈ 244万元素)
+  输出: day embedding (512,) + 上下文化episode states (n_ep, 512)
+  参数: ~35M
+  设计理由: 全局注意力让任意两个时间段直接交互，
+            这正是论文核心叙事"24h上下文"的最佳体现。
 ```
 
-**为什么层次化：**
-- Level 1序列长度60，Level 2序列长度288 → 标准注意力即可，无需特殊优化
-- 显存估算：~0.2GB注意力矩阵（4×A100绰绰有余）
-- 自然对应临床的多尺度分析：拍级 → 分钟级 → 小时级 → 全天级
+**总参数量: ~48M**
 
-**位置编码：**
-- Level 1: 标准可学习位置编码（窗口内相对位置）
-- Level 2: 绝对时间编码（编码"几点钟"）+ 可学习位置编码
-- 时间编码让模型知道"这是凌晨3点的心电"vs"这是下午3点的心电"
+**为什么不用Mamba/SSM：**
+- RhythmBranch: 64拍episode内的局部conv已足够，不需要100k token的全天序列
+- DayEncoder: 1563 tokens对Transformer无压力，且全局注意力比SSM更直接地建模时序关系
+- 工程收益: 纯PyTorch实现，无外部依赖，任何GPU环境可运行
 
-### 2.2 预训练策略（三个自监督任务）
+### 2.2 预训练策略（六个自监督任务）
 
-全部不需要标签，仅用原始波形：
+全部不需要标签，仅用原始波形和R波标注：
 
-**任务1: Masked Window Modeling (MWM)**
-- 随机mask 75%的5分钟窗口
-- 让Level 2 Transformer预测被mask窗口的Level 1表征
-- 迫使模型学习24h内不同时间段之间的关系
-- 类比：MAE/BEiT在图像上的成功
+**Beat级:**
+- Masked Patch MAE: 50% patch mask, L1 + derivative-L1重建
+- 迫使beat tokenizer学习完整的P-QRS-T形态
 
-**任务2: Masked Patch Modeling (MPM)**
-- 在每个5分钟窗口内，随机mask 50%的5秒patch
-- 让Level 1 Transformer预测被mask patch的波形特征
-- 迫使模型学习ECG波形的局部形态和短时动态
-- 这是波形级别的细粒度学习
+**Episode级:**
+- Contrastive Predictive Coding (CPC): 从当前episode预测下2个episode
+- Waveform-Rhythm Alignment: 对齐波形episode token和节律episode token (InfoNCE)
+- Temporal Order Prediction: 判断相邻episode是否被交换
 
-**任务3: Temporal Order Prediction (TOP)**
-- 随机打乱部分5分钟窗口的顺序
-- 让模型判断哪些窗口被打乱了
-- 迫使模型学习24h内的时间顺序和昼夜节律
-- 这是只有连续数据才能做的预训练任务
+**Day级:**
+- Masked Episode Modeling: mask 15% episode tokens, 从day encoder输出重建
+- Day Statistics Prediction: 预测全天统计量 (HR, HRV, PVC burden等)
+- Report Concept Prediction (弱监督): 预测医生结论中的19个概念标签
+
+**Rhythm级:**
+- Span-Masked Rhythm Prediction: mask 30%节律token spans, 预测VQ code和RR bin
+- Next-RR Prediction: 从节律状态预测下一个RR间期
 
 ### 2.3 训练配置
 
 | 参数 | 值 | 理由 |
 |------|-----|------|
-| Level 1 Transformer | 6层, d=512, 8头 | 局部编码器不需要太大 |
-| Level 2 Transformer | 12层, d=768, 12头 | 全局编码器需要更大容量 |
-| 总参数量 | ~80-100M | 与现有ECG FM可比 |
-| Batch size | 16 (4/GPU × 4 GPU) | 每个样本是一个完整24h记录 |
-| 优化器 | AdamW, lr=1e-4, cosine decay | 标准配置 |
-| 预训练epochs | 100-200 | 10k例 × 200 = 2M步 |
-| 预计训练时间 | 3-5天（4×A100） | 可接受 |
-| 混合精度 | BF16 | A100原生支持 |
+| Beat Tokenizer | Conv1d + 4 ResBlocks + VQ | 轻量但足够捕获形态 |
+| Episode Encoder | 6层Transformer, d=384, 6头 | 64拍序列，标准注意力 |
+| Rhythm Branch | 4层local-conv+MLP, d=128 | Episode-local，无需SSM |
+| Day Encoder | 12层Transformer, d=512, 8头 | 1563 tokens全局注意力 |
+| 总参数量 | ~48M | 与现有ECG FM可比 |
+| Batch size | 1/GPU × 8 GPU = 8 | 每个样本是一个完整24h记录 |
+| 优化器 | AdamW, lr=2e-4, cosine decay, warmup 2000步 | 标准配置 |
+| 预训练epochs | 40 | 1170例 × 40 = ~4000步 |
+| 预计训练时间 | 1-2天（8×GPU） | 可接受 |
+| 混合精度 | BF16 | 标准 |
+| Loss权重 | beat 0.35, episode 0.20, day 0.20, rhythm 0.20, report 0.05 | Day/report前5 epoch ramp-up |
 
 ### 2.4 数据处理Pipeline
 
 ```
 原始数据 (data/DMS/)
-  ├── .dat文件 → 读取uint8, reshape为(n_samples, 3), 减去基线128
-  ├── RPointProperty.txt → 提取R点时间戳和类型标签
+  ├── .dat文件 → 读取uint8, reshape为(n_samples, 3)
+  ├── RPointProperty.txt → 提取R点时间戳和类型标签(N/V/F)
   └── HolterSummary.csv → 提取人口学信息和医生结论
 
 预处理:
-  1. 质控: 剔除记录<20h的（预计<5%）
-  2. 波形标准化: z-score per channel per patient
-  3. 切分: 24h → 288个5分钟窗口 → 每窗口60个5秒patch
-  4. 数据增强: 时间抖动、通道dropout、高斯噪声
+  1. 质控: beat count差异>10%或报告缺失的排除 (8/1178条)
+  2. 波形标准化: per-channel median/MAD, clip [-5, 5]
+  3. Beat窗口: 以R波为中心, 24 pre + 56 post samples = 80 samples
+  4. Episode切分: 每64拍为一个episode (~1563 episodes/day)
+  5. 节律token: VQ code + 32-bin log-RR + hour_sin/cos
+  6. 数据增强: 幅度缩放、高斯噪声、基线漂移、通道dropout、时间抖动
 ```
 
 ---
@@ -285,36 +306,44 @@ Level 2 (全局编码器): 5分钟窗口表征 → 24h全局表征
 
 ### 直接竞品（ECG基础模型）
 
-1. **Oh et al.** "A foundation model for clinician-level electrocardiogram interpretation." *Nature Medicine*, 2024.
-   - 1.1M 12导联ECG预训练，多任务微调
-   - 我们的差异：24h连续 vs 10sec片段
+1. **ECGFounder** "A foundation model for ECG analysis." *NEJM AI*, 2025.
+   - >10M ECGs, 150 labels, reduced-lead support
+   - 我们的差异：24h连续 vs 10sec片段；Holter-native任务
 
-2. **Wornow et al.** "ECG-FM: An open electrocardiogram foundation model." *arXiv*, 2024.
+2. **ECG-LFM** "A large foundation model for ECG." *Nature Communications*, 2026.
+   - >10M 12-lead ECGs, SSL, CVD prediction + genetics
+   - 我们的差异：时序动态 vs 静态形态
+
+3. **AnyECG** "Universal ECG foundation model." *arXiv*, 2026.
+   - 13.3M ECGs, broad health profiling
+   - 我们的差异：同上
+
+4. **ECG-FM (Wornow et al.)** "An open electrocardiogram foundation model." *arXiv*, 2024.
    - 自监督预训练，开源
    - 我们的差异：时序动态 vs 静态形态
 
-3. **Hughes et al.** "A foundation model for ECG analysis." *Lancet Digital Health*, 2024-25.
-   - 大规模预训练+迁移学习
-   - 我们的差异：同上
+5. **Oh et al.** "A foundation model for clinician-level ECG interpretation." *Nature Medicine*, 2024.
+   - 1.1M 12导联ECG预训练，多任务微调
+   - 我们的差异：24h连续 vs 10sec片段
+
+### 最接近的Holter DL竞品
+
+6. **DeepHHF** "Deep learning on 24h Holter for heart failure prediction." 2025/2026.
+   - 69,663条24h单导联Holter预测5年心衰
+   - 关键区别：预测模型（非基础模型），单导联，无SSL预训练
+   - 我们的优势：基础模型范式，多任务，可迁移
+
+7. **RhythmBERT** "ECG-as-language rhythm SSL." *arXiv*, 2026.
+   - 概念上接近我们的rhythm branch
+   - 我们的差异：全天多尺度 vs 片段级
 
 ### 方法参考
 
-4. **He et al.** "Masked Autoencoders Are Scalable Vision Learners." *CVPR*, 2022.
-   - MAE预训练策略，我们的MWM/MPM任务的灵感来源
+8. **He et al.** "Masked Autoencoders Are Scalable Vision Learners." *CVPR*, 2022.
+   - MAE预训练策略参考
 
-5. **Liu et al.** "Swin Transformer: Hierarchical Vision Transformer." *ICCV*, 2021.
-   - 层次化Transformer架构参考
-
-### 领域奠基
-
-6. **Hannun et al.** "Cardiologist-level arrhythmia detection and classification in ambulatory ECGs using a deep neural network." *Nature Medicine*, 2019.
+9. **Hannun et al.** "Cardiologist-level arrhythmia detection using a deep neural network." *Nature Medicine*, 2019.
    - DL+ECG范式奠基
 
-7. **Attia et al.** "An artificial intelligence-enabled electrocardiogram for the detection of cardiac contractile dysfunction." *Nature Medicine*, 2019.
-   - "ECG中发现隐匿信息"的叙事先驱
-
-8. **Ribeiro et al.** "Automatic diagnosis of the 12-lead electrocardiogram using a deep neural network." *Nature Communications*, 2020.
-   - 大规模ECG分类
-
-9. **Raghunath et al.** "Prediction of mortality from 12-lead electrocardiogram voltage data using a deep neural network." *Nature Medicine*, 2020.
-   - ECG预测预后
+10. **Attia et al.** "AI-enabled ECG for detection of cardiac contractile dysfunction." *Nature Medicine*, 2019.
+    - "ECG中发现隐匿信息"的叙事先驱
