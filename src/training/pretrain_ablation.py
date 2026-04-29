@@ -38,8 +38,7 @@ ABLATION_CONFIGS = {
         "loss_zero": ["day_stats"],
     },
     "transformer_day": {
-        "description": "A7: Sparse Transformer day encoder instead of Mamba",
-        "use_transformer_day": True,
+        "description": "A7: (Now default) — kept for backward compat, no-op",
     },
     "segment_model": {
         "description": "A8: Parameter-matched segment model (no full-day context)",

@@ -1,17 +1,24 @@
-._*
+# .gitignore
 __pycache__/
-.DS_Store/
-.claude/
+*.pyc
+.DS_Store
+._*
 
+# IDE
+.vscode/
+.idea/
+
+# Data (large, not tracked)
 /data/
-/figures/
-/refine-logs/
+
+# Outputs (generated at runtime)
+/checkpoints/
 /results/
+/logs/
+/figures/
+/wandb/
+
+# Local-only working files
+.claude/
+/refine-logs/
 /analyse/
-
-IDEA_REPORT*.md
-NOVELTY_REPORT*.md
-
-notes/
-
-wandb/
