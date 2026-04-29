@@ -13,11 +13,44 @@ import torch.nn.functional as F
 # ---------------------------------------------------------------------------
 # Backend selection: official mamba-ssm (CUDA) vs pure-PyTorch fallback (MPS/CPU)
 # ---------------------------------------------------------------------------
+HAS_MAMBA_SSM = False
+_OfficialMamba = None
+
 try:
-    from mamba_ssm.modules.mamba2 import Mamba2 as _OfficialMamba2
+    from mamba_ssm.modules.mamba2 import Mamba2 as _OfficialMamba
     HAS_MAMBA_SSM = True
-except ImportError:
-    HAS_MAMBA_SSM = False
+except (ImportError, ModuleNotFoundError):
+    pass
+
+if not HAS_MAMBA_SSM:
+    try:
+        from mamba_ssm import Mamba2 as _OfficialMamba
+        HAS_MAMBA_SSM = True
+    except (ImportError, ModuleNotFoundError):
+        pass
+
+if not HAS_MAMBA_SSM:
+    try:
+        from mamba_ssm import Mamba as _OfficialMamba
+        HAS_MAMBA_SSM = True
+    except (ImportError, ModuleNotFoundError):
+        pass
+
+if not HAS_MAMBA_SSM:
+    try:
+        from mamba_ssm.modules.mamba_simple import Mamba as _OfficialMamba
+        HAS_MAMBA_SSM = True
+    except (ImportError, ModuleNotFoundError):
+        pass
+
+import warnings
+if not HAS_MAMBA_SSM:
+    warnings.warn(
+        "mamba-ssm not found — using pure-PyTorch fallback SSM. "
+        "This is NOT suitable for training on long sequences (>1k tokens). "
+        "Install mamba-ssm: pip install mamba-ssm",
+        stacklevel=2,
+    )
 
 
 class _FallbackMamba(nn.Module):
@@ -76,14 +109,30 @@ class _FallbackMamba(nn.Module):
 def _make_mamba_inner(d_model: int, d_state: int = 64, d_conv: int = 4, expand: int = 2) -> nn.Module:
     """Create a single-direction Mamba layer, choosing backend by availability."""
     if HAS_MAMBA_SSM and torch.cuda.is_available():
-        headdim = min(64, d_model * expand)
-        return _OfficialMamba2(
-            d_model=d_model,
-            d_state=d_state,
-            d_conv=d_conv,
-            expand=expand,
-            headdim=headdim,
-        )
+        try:
+            # Try Mamba2 first (needs headdim, d_model*expand must be divisible)
+            d_inner = d_model * expand
+            headdim = min(64, d_inner)
+            if d_inner % headdim == 0:
+                return _OfficialMamba(
+                    d_model=d_model,
+                    d_state=d_state,
+                    d_conv=d_conv,
+                    expand=expand,
+                    headdim=headdim,
+                )
+        except TypeError:
+            pass
+        # Mamba1 doesn't have headdim
+        try:
+            return _OfficialMamba(
+                d_model=d_model,
+                d_state=d_state,
+                d_conv=d_conv,
+                expand=expand,
+            )
+        except Exception as e:
+            warnings.warn(f"Failed to create official Mamba: {e}. Using fallback.")
     return _FallbackMamba(d_model, d_state, d_conv, expand)
 
 
