@@ -42,7 +42,7 @@ if [ -n "$RESUME" ]; then
 fi
 
 PYTHONPATH="$PROJECT_DIR${PYTHONPATH:+:$PYTHONPATH}" \
-torchrun --nproc_per_node=8 --master_port=29500 \
+torchrun --nproc_per_node=8 --master_port=29505 \
     src/training/pretrain.py \
     --data_dir "$DATA_DIR" \
     --valid_list "$VALID_LIST" \
