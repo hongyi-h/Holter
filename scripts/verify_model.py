@@ -24,23 +24,6 @@ def main():
         device = torch.device("cpu")
     print(f"Device: {device}")
 
-    # --- Check mamba-ssm backend ---
-    from src.models.rhythm_branch import HAS_MAMBA_SSM, _OfficialMamba
-    print(f"mamba-ssm loaded: {HAS_MAMBA_SSM}")
-    if HAS_MAMBA_SSM:
-        print(f"  Backend class: {_OfficialMamba}")
-    else:
-        print("  WARNING: Using fallback SSM — will OOM on full-day sequences!")
-        print("  Fix: pip install mamba-ssm (or check import errors)")
-        # Try to diagnose why import failed
-        try:
-            import mamba_ssm
-            print(f"  mamba_ssm package found at: {mamba_ssm.__file__}")
-            print(f"  mamba_ssm version: {getattr(mamba_ssm, '__version__', 'unknown')}")
-            print(f"  Available modules: {dir(mamba_ssm)}")
-        except ImportError as e:
-            print(f"  mamba_ssm not installed: {e}")
-
     # --- Load sample data ---
     records = HolterRecord.discover("data/DMS")
     print(f"Records: {len(records)}")
