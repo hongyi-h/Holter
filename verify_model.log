@@ -1,0 +1,53 @@
+Device: cuda
+Records: 1178
+Dataset size: 1178
+
+Test batch: 512 beats, 8 episodes
+  windows: torch.Size([1, 512, 80, 3])
+  metadata: torch.Size([1, 512, 6])
+
+Model parameters:
+  beat_tokenizer: 1,091,217 (1.1M)
+  episode_encoder: 10,746,624 (10.7M)
+  rhythm_branch: 383,513 (0.4M)
+  day_encoder: 39,408,129 (39.4M)
+  beat_proj: 656,384 (0.7M)
+  total: 52,285,867 (52.3M)
+
+Running forward pass...
+/mnt/afs/zhengmingkai/miniconda3/envs/holter/lib/python3.12/site-packages/torch/nn/functional.py:6001: UserWarning: 1Torch was not compiled with memory efficient attention. (Triggered internally at /workspace/framework/mcPytorch/aten/src/ATen/native/transformers/cuda/sdp_utils.cpp:738.)
+  return _scaled_dot_product_attention(query, key, value, attn_mask, dropout_p, is_causal, scale = scale, enable_gqa = enable_gqa)
+Forward pass: 3.77s
+
+Outputs:
+  beat_embeds: torch.Size([1, 512, 256]) (dtype=torch.float32)
+  beat_repr: torch.Size([1, 512, 512]) (dtype=torch.float32)
+  code_idx: torch.Size([1, 512]) (dtype=torch.int64)
+  episode_tokens: list of 1 tensors, first shape=torch.Size([8, 384])
+  episode_ctx: torch.Size([1, 8, 512]) (dtype=torch.float32)
+  ep_fused_targets: torch.Size([1, 8, 512]) (dtype=torch.float32)
+  beat_rhythm: torch.Size([1, 512, 128]) (dtype=torch.float32)
+  day_embed: torch.Size([1, 512]) (dtype=torch.float32)
+  vq_loss: torch.Size([]) (dtype=torch.float32)
+
+Computing losses...
+Loss computation: 0.11s
+
+Losses:
+  beat: 19.6740
+  beat_mae: 19.6740
+  day: 0.0812
+  day_mask: 0.0732
+  day_stats: 0.0159
+  ep_align: 2.0917
+  ep_cpc: 1.8688
+  ep_order: 0.6996
+  episode: 2.9847
+  report: 0.6889
+  rhythm: 8.6332
+  rhythm_mask: 8.5051
+  rr_next: 0.6405
+  total: 9.2096
+  vq: 0.0019
+
+=== ALL CHECKS PASSED ===
