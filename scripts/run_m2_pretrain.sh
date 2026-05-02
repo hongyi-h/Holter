@@ -34,11 +34,16 @@ echo "Epochs: $EPOCHS, BS: $BATCH_SIZE, LR: $LR"
 echo "GPUs: $(nvidia-smi -L 2>/dev/null | wc -l)"
 echo ""
 
-# --- Step 1: Quick sanity check (single GPU, 1 record, forward+backward) ---
-echo "=== Step 1: Sanity check ==="
-PYTHONPATH="$PROJECT_DIR" python scripts/verify_model.py
-echo "Sanity check passed."
-echo ""
+# --- Step 1: Quick sanity check (skip with SKIP_SANITY=1) ---
+if [ "${SKIP_SANITY:-0}" != "1" ]; then
+    echo "=== Step 1: Sanity check ==="
+    PYTHONPATH="$PROJECT_DIR" python scripts/verify_model.py
+    echo "Sanity check passed."
+    echo ""
+else
+    echo "=== Step 1: Sanity check SKIPPED ==="
+    echo ""
+fi
 
 # --- Step 2: Full pretraining ---
 echo "=== Step 2: Full pretraining ==="
