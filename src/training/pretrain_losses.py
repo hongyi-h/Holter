@@ -367,16 +367,12 @@ class HolterFMPretrainLoss(nn.Module):
         losses["day_stats"] = self.day_stats(model_out["day_embed"], batch["day_stats"])
 
         # day mask loss: reconstruct masked episode tokens from day encoder output
+        # mask was already applied in the model before the day encoder saw the tokens
         ep_ctx = model_out["episode_ctx"]
         ep_fused = model_out.get("ep_fused_targets")
-        if ep_ctx is not None and ep_fused is not None:
-            B_ep, N_ep, _ = ep_ctx.shape
-            day_mask = torch.rand(B_ep, N_ep, device=ep_ctx.device) < 0.15
-            # don't mask padded episodes
-            for b in range(B_ep):
-                ne = batch["n_episodes"][b].item()
-                day_mask[b, ne:] = False
-            losses["day_mask"] = self.day_mask(ep_ctx, ep_fused, day_mask)
+        ep_mask = model_out.get("ep_mask")
+        if ep_ctx is not None and ep_fused is not None and ep_mask is not None:
+            losses["day_mask"] = self.day_mask(ep_ctx, ep_fused, ep_mask)
         else:
             losses["day_mask"] = torch.tensor(0.0, device=batch["windows"].device)
 

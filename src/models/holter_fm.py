@@ -13,7 +13,7 @@ from .day_encoder import DayEncoder
 
 
 class HolterFM(nn.Module):
-    """42.9M-parameter Holter Foundation Model.
+    """52.3M-parameter Holter Foundation Model.
 
     Forward pass processes one full day:
     1. Beat tokenizer: (n_beats, 80, 3) → (n_beats, 256) embeddings + VQ codes
@@ -132,7 +132,16 @@ class HolterFM(nn.Module):
                     ep_wave[b, :n_ep] = all_episode_tokens[b]
                     ep_rhythm[b, :n_ep] = rhythm_out["episode_rhythm"][b, :n_ep]
 
-            day_out = self.day_encoder(ep_wave, ep_rhythm)
+            # generate episode mask for pretraining (15% of valid episodes)
+            if self.training:
+                ep_mask = torch.rand(B, max_ep, device=device) < 0.15
+                for b in range(B):
+                    ne = batch["n_episodes"][b].item()
+                    ep_mask[b, ne:] = False
+            else:
+                ep_mask = None
+
+            day_out = self.day_encoder(ep_wave, ep_rhythm, ep_mask=ep_mask)
             day_embed = day_out["day_embed"]
             episode_ctx = day_out["episode_ctx"]
             ep_fused_targets = day_out.get("_fused_input")
@@ -155,6 +164,7 @@ class HolterFM(nn.Module):
             "episode_tokens": all_episode_tokens,  # list of (n_ep, 384)
             "episode_ctx": episode_ctx,       # (B, max_ep, 512) or None
             "ep_fused_targets": ep_fused_targets,  # (B, max_ep, 512) detached, for DayMaskLoss
+            "ep_mask": ep_mask,               # (B, max_ep) bool or None
             "beat_rhythm": beat_rhythm,       # (B, max_beats, 128)
             "day_embed": day_embed,           # (B, 512)
             "vq_loss": vq_loss,               # scalar

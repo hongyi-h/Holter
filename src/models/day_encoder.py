@@ -79,6 +79,9 @@ class DayEncoder(nn.Module):
             nn.Linear(d_model, d_model),
         )
 
+        # learned mask token for masked episode modeling
+        self.mask_token = nn.Parameter(torch.randn(d_model) * 0.02)
+
         # learned summary tokens (like CLS)
         self.summary_tokens = nn.Parameter(torch.randn(1, n_summary_tokens, d_model) * 0.02)
 
@@ -107,20 +110,55 @@ class DayEncoder(nn.Module):
         self,
         episode_waveform: torch.Tensor,
         episode_rhythm: torch.Tensor,
+        ep_mask: torch.Tensor | None = None,
     ) -> dict[str, torch.Tensor]:
         """
         Args:
             episode_waveform: (B, n_ep, 384) from episode encoder CLS tokens
             episode_rhythm: (B, n_ep, 128) from rhythm branch episode pooling
+            ep_mask: (B, n_ep) bool, True = masked. If provided, masked positions
+                     are replaced before the transformer (80% mask token, 10% random, 10% keep).
 
         Returns:
             day_embed: (B, 512)
             episode_ctx: (B, n_ep, 512)
-            _fused_input: (B, n_ep, 512) detached, for DayMaskLoss
+            _fused_input: (B, n_ep, 512) detached, pre-mask targets for DayMaskLoss
         """
         B, n_ep, _ = episode_waveform.shape
 
         z = self.fusion(torch.cat([episode_waveform, episode_rhythm], dim=-1))
+
+        # save pre-mask fused tokens as reconstruction targets
+        fused_targets = z.detach()
+
+        # apply BERT-style masking before the transformer sees the tokens
+        if ep_mask is not None and ep_mask.any():
+            z_masked = z.clone()
+            n_masked = ep_mask.sum().item()
+            rand_vals = torch.rand(n_masked, device=z.device)
+            # 80% → learned mask token
+            mask_token_sel = rand_vals < 0.8
+            # 10% → random episode token
+            random_sel = (rand_vals >= 0.8) & (rand_vals < 0.9)
+            # 10% → keep (no action needed)
+
+            # apply mask token replacement
+            z_masked[ep_mask] = torch.where(
+                mask_token_sel.unsqueeze(-1).expand(-1, z.shape[-1]),
+                self.mask_token.unsqueeze(0).expand(n_masked, -1),
+                z_masked[ep_mask],
+            )
+            # apply random replacement
+            if random_sel.any():
+                n_random = random_sel.sum().item()
+                rand_b = torch.randint(0, B, (n_random,), device=z.device)
+                rand_e = torch.randint(0, n_ep, (n_random,), device=z.device)
+                random_tokens = z[rand_b, rand_e].detach()
+                # get the positions within the masked set that need random replacement
+                masked_flat = z_masked[ep_mask]
+                masked_flat[random_sel] = random_tokens
+                z_masked[ep_mask] = masked_flat
+            z = z_masked
 
         summary = self.summary_tokens.expand(B, -1, -1)
         x = torch.cat([summary, z], dim=1)  # (B, n_summary + n_ep, 512)
@@ -143,5 +181,5 @@ class DayEncoder(nn.Module):
         return {
             "day_embed": day_embed,
             "episode_ctx": episode_ctx,
-            "_fused_input": z.detach(),
+            "_fused_input": fused_targets,
         }

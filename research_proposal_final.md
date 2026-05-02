@@ -67,7 +67,7 @@ Level 1b (Rhythm Branch): 64拍节律特征 → episode rhythm token
   输入: VQ code + RR bins + clock features, 每episode独立处理
   架构: 4层 local-conv + MLP blocks (kernel=7), attentive pooling
   输出: per-beat rhythm state (128,) + episode rhythm summary (128,)
-  参数: ~0.8M
+  参数: ~0.4M
   设计理由: 节律上下文（耦合间期、HRV、ectopy模式）在±64拍内完备，
             不需要跨episode的全天序列建模。昼夜信息由clock features提供。
 
@@ -76,12 +76,12 @@ Level 2 (Day Encoder): ~1,563 episode tokens → 24h全局表征
   架构: 12层标准Transformer, d=512, 8头, sinusoidal位置编码
   序列长度: ~1,563 (标准注意力完全可行: 1563² ≈ 244万元素)
   输出: day embedding (512,) + 上下文化episode states (n_ep, 512)
-  参数: ~35M
+  参数: ~39.4M
   设计理由: 全局注意力让任意两个时间段直接交互，
             这正是论文核心叙事"24h上下文"的最佳体现。
 ```
 
-**总参数量: ~48M**
+**总参数量: ~52.3M**
 
 **为什么不用Mamba/SSM：**
 - RhythmBranch: 64拍episode内的局部conv已足够，不需要100k token的全天序列
@@ -118,9 +118,9 @@ Level 2 (Day Encoder): ~1,563 episode tokens → 24h全局表征
 | Episode Encoder | 6层Transformer, d=384, 6头 | 64拍序列，标准注意力 |
 | Rhythm Branch | 4层local-conv+MLP, d=128 | Episode-local，无需SSM |
 | Day Encoder | 12层Transformer, d=512, 8头 | 1563 tokens全局注意力 |
-| 总参数量 | ~48M | 与现有ECG FM可比 |
+| 总参数量 | ~52.3M | 与现有ECG FM可比 |
 | Batch size | 1/GPU × 8 GPU = 8 | 每个样本是一个完整24h记录 |
-| 优化器 | AdamW, lr=2e-4, cosine decay, warmup 2000步 | 标准配置 |
+| 优化器 | AdamW, lr=2e-4, cosine decay, warmup 200步 | 标准配置 |
 | 预训练epochs | 40 | 1170例 × 40 = ~4000步 |
 | 预计训练时间 | 1-2天（8×GPU） | 可接受 |
 | 混合精度 | BF16 | 标准 |

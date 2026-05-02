@@ -77,7 +77,7 @@ def pretrain(
     batch_size: int = 1,
     lr: float = 2e-4,
     grad_clip: float = 1.0,
-    warmup_steps: int = 2000,
+    warmup_steps: int = 200,
     save_every: int = 2,
     log_every: int = 10,
     use_amp: bool = True,
