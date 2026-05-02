@@ -4,7 +4,7 @@ data:
   episode_len: 64
   pre_samples: 24
   post_samples: 56
-  max_beats: 150000
+  max_beats: 80000
   num_workers: 4
 
 model:

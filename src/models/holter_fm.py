@@ -82,8 +82,9 @@ class HolterFM(nn.Module):
         code_idx = beat_out["code_idx"].reshape(B, max_beats)
         vq_loss = beat_out["vq_loss"]
 
-        # --- 2. Episode encoder (process episodes per sample) ---
+        # --- 2. Episode encoder (process episodes per sample, chunked) ---
         ep_len = self.episode_len
+        ep_chunk = 128
         all_episode_tokens = []
         all_beat_ctx = []
 
@@ -97,11 +98,17 @@ class HolterFM(nn.Module):
                 all_beat_ctx.append(torch.zeros(n_b, self.episode_encoder.d_model, device=device))
                 continue
 
-            ep_input = beat_embeds[b, :ep_beats].reshape(n_ep, ep_len, -1)
-            ep_out = self.episode_encoder(ep_input)
-            all_episode_tokens.append(ep_out["episode_token"])  # (n_ep, 384)
+            ep_tokens_list = []
+            beat_ctx_list = []
+            for start in range(0, n_ep, ep_chunk):
+                end = min(start + ep_chunk, n_ep)
+                chunk_input = beat_embeds[b, start * ep_len:end * ep_len].reshape(end - start, ep_len, -1)
+                chunk_out = self.episode_encoder(chunk_input)
+                ep_tokens_list.append(chunk_out["episode_token"])
+                beat_ctx_list.append(chunk_out["beat_ctx"].reshape((end - start) * ep_len, -1))
 
-            ctx = ep_out["beat_ctx"].reshape(ep_beats, -1)  # (ep_beats, 384)
+            all_episode_tokens.append(torch.cat(ep_tokens_list, dim=0))
+            ctx = torch.cat(beat_ctx_list, dim=0)
             if n_b > ep_beats:
                 pad = torch.zeros(n_b - ep_beats, ctx.shape[-1], device=device)
                 ctx = torch.cat([ctx, pad], dim=0)

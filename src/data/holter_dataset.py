@@ -18,7 +18,7 @@ class HolterPretrainDataset(Dataset):
         episode_len: int = 64,
         pre_samples: int = 24,
         post_samples: int = 56,
-        max_beats: int = 150_000,
+        max_beats: int = 80_000,
         augment: bool = False,
         day_stats_from_report: bool = True,
     ):
