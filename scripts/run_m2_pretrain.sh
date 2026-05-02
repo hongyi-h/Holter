@@ -14,8 +14,6 @@ export TORCHDYNAMO_DISABLE=1
 export TORCH_COMPILE_DISABLE=1
 # Set MACA toolkit path for MetaX C500 (root cause fix for triton metax crash)
 export MACA_PATH="${MACA_PATH:-/opt/maca}"
-# Reduce CUDA memory fragmentation
-export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 DATA_DIR="${DATA_DIR:-data/DMS}"
 VALID_LIST="${VALID_LIST:-valid_records.txt}"
