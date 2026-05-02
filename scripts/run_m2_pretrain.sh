@@ -8,6 +8,13 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 cd "$PROJECT_DIR"
 
+# Disable torch.compile / dynamo to avoid triton metax backend crash on C500
+# (triton.backends.metax.driver requires MACA_PATH which may not be set)
+export TORCHDYNAMO_DISABLE=1
+export TORCH_COMPILE_DISABLE=1
+# Set MACA toolkit path for MetaX C500 (root cause fix for triton metax crash)
+export MACA_PATH="${MACA_PATH:-/opt/maca}"
+
 DATA_DIR="${DATA_DIR:-data/DMS}"
 VALID_LIST="${VALID_LIST:-valid_records.txt}"
 OUTPUT_DIR="${OUTPUT_DIR:-checkpoints/pretrain}"

@@ -8,6 +8,9 @@ import time
 import json
 from pathlib import Path
 
+# Must be set before torch import — prevents DDP from triggering triton metax crash
+os.environ["TORCHDYNAMO_DISABLE"] = "1"
+
 import torch
 import torch.nn as nn
 import torch.distributed as dist
