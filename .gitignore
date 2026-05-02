@@ -4,6 +4,8 @@ __pycache__/
 .DS_Store
 ._*
 
+metax-tech.wiki/
+
 # IDE
 .vscode/
 .idea/
