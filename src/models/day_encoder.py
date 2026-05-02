@@ -136,25 +136,21 @@ class DayEncoder(nn.Module):
             z_masked = z.clone()
             n_masked = ep_mask.sum().item()
             rand_vals = torch.rand(n_masked, device=z.device)
-            # 80% → learned mask token
             mask_token_sel = rand_vals < 0.8
-            # 10% → random episode token
             random_sel = (rand_vals >= 0.8) & (rand_vals < 0.9)
-            # 10% → keep (no action needed)
 
-            # apply mask token replacement
+            # cast mask_token to match z dtype (bf16 under autocast)
+            mt = self.mask_token.to(z.dtype).unsqueeze(0).expand(n_masked, -1)
             z_masked[ep_mask] = torch.where(
                 mask_token_sel.unsqueeze(-1).expand(-1, z.shape[-1]),
-                self.mask_token.unsqueeze(0).expand(n_masked, -1),
+                mt,
                 z_masked[ep_mask],
             )
-            # apply random replacement
             if random_sel.any():
                 n_random = random_sel.sum().item()
                 rand_b = torch.randint(0, B, (n_random,), device=z.device)
                 rand_e = torch.randint(0, n_ep, (n_random,), device=z.device)
                 random_tokens = z[rand_b, rand_e].detach()
-                # get the positions within the masked set that need random replacement
                 masked_flat = z_masked[ep_mask]
                 masked_flat[random_sel] = random_tokens
                 z_masked[ep_mask] = masked_flat
