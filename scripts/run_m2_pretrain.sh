@@ -14,6 +14,8 @@ export TORCHDYNAMO_DISABLE=1
 export TORCH_COMPILE_DISABLE=1
 # Set MACA toolkit path for MetaX C500 (root cause fix for triton metax crash)
 export MACA_PATH="${MACA_PATH:-/opt/maca}"
+# Reduce CUDA memory fragmentation
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 DATA_DIR="${DATA_DIR:-data/DMS}"
 VALID_LIST="${VALID_LIST:-valid_records.txt}"
@@ -21,7 +23,7 @@ OUTPUT_DIR="${OUTPUT_DIR:-checkpoints/pretrain}"
 EPOCHS="${EPOCHS:-40}"
 BATCH_SIZE="${BATCH_SIZE:-1}"
 LR="${LR:-2e-4}"
-NUM_WORKERS="${NUM_WORKERS:-4}"
+NUM_WORKERS="${NUM_WORKERS:-2}"
 RESUME="${RESUME:-}"
 
 echo "=== M2: HolterFM Pretraining ==="

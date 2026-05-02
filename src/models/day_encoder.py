@@ -11,6 +11,7 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.checkpoint import checkpoint
 
 
 class DayTransformerLayer(nn.Module):
@@ -164,7 +165,7 @@ class DayEncoder(nn.Module):
         x = x + self.pos_embed[:, :seq_len]
 
         for layer in self.layers:
-            x = layer(x)
+            x = checkpoint(layer, x, use_reentrant=False)
         x = self.norm(x)
 
         episode_ctx = x[:, self.n_summary_tokens:]  # (B, n_ep, 512)

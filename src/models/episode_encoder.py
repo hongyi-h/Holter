@@ -6,6 +6,7 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.checkpoint import checkpoint
 
 
 class RotaryEmbedding(nn.Module):
@@ -116,7 +117,7 @@ class EpisodeEncoder(nn.Module):
         sin = sin.unsqueeze(0).unsqueeze(0)
 
         for layer in self.layers:
-            x = layer(x, cos, sin)
+            x = checkpoint(layer, x, cos, sin, use_reentrant=False)
         x = self.norm(x)
 
         return {
