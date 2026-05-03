@@ -148,7 +148,7 @@ def pretrain(
         log(f"Model parameters: {json.dumps({k: f'{v/1e6:.1f}M' for k, v in params.items()})}")
 
     if use_ddp:
-        model = DDP(model, device_ids=[local_rank], find_unused_parameters=False)
+        model = DDP(model, device_ids=[local_rank], find_unused_parameters=True)
 
     optimizer = build_optimizer(model, lr=lr)
     # also add loss_fn params that need optimization
