@@ -376,7 +376,7 @@ class HolterFMPretrainLoss(nn.Module):
         else:
             losses["day_mask"] = torch.tensor(0.0, device=batch["windows"].device)
 
-        losses["day"] = losses["day_mask"] + 0.5 * losses["day_stats"]
+        losses["day"] = losses["day_mask"]
 
         # report (if available)
         if "concept_labels" in batch:
