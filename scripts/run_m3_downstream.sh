@@ -2,6 +2,15 @@
 # M3: Run all downstream evaluations (R030-R034)
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+cd "$PROJECT_DIR"
+
+export TORCHDYNAMO_DISABLE=1
+export TORCH_COMPILE_DISABLE=1
+export MACA_PATH="${MACA_PATH:-/opt/maca}"
+export PYTHONPATH="$PROJECT_DIR"
+
 CHECKPOINT="${CHECKPOINT:-checkpoints/pretrain/holter_fm_best.pt}"
 DATA_DIR="${DATA_DIR:-data/DMS}"
 DEVICE="${DEVICE:-cuda}"
