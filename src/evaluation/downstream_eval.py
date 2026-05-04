@@ -171,7 +171,7 @@ def run_beat_classification(
                          for k, v in batch.items()}
                 out = model(batch)
                 logits = head(out["beat_repr"].float())
-                mask = batch["valid_mask"]
+                mask = batch["valid_mask"] & (batch["beat_labels"] >= 0) & (batch["beat_labels"] < 3)
                 preds = logits[mask].argmax(dim=-1).cpu().numpy()
                 labels = batch["beat_labels"][mask].cpu().numpy()
                 all_preds.append(preds)
@@ -197,7 +197,7 @@ def run_beat_classification(
                      for k, v in batch.items()}
             out = model(batch)
             logits = head(out["beat_repr"].float())
-            mask = batch["valid_mask"]
+            mask = batch["valid_mask"] & (batch["beat_labels"] >= 0) & (batch["beat_labels"] < 3)
             preds = logits[mask].argmax(dim=-1).cpu().numpy()
             labels = batch["beat_labels"][mask].cpu().numpy()
             all_preds.append(preds)

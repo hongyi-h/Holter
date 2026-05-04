@@ -25,8 +25,9 @@ class BeatClassificationHead(nn.Module):
                      valid_mask: torch.Tensor, class_weights: torch.Tensor | None = None) -> torch.Tensor:
         # logits: (B, T, 3), labels: (B, T), valid_mask: (B, T)
         B, T, C = logits.shape
-        logits_flat = logits[valid_mask]
-        labels_flat = labels[valid_mask]
+        known_mask = valid_mask & (labels >= 0) & (labels < C)
+        logits_flat = logits[known_mask]
+        labels_flat = labels[known_mask]
         if labels_flat.numel() == 0:
             return torch.tensor(0.0, device=logits.device)
         if class_weights is None:
