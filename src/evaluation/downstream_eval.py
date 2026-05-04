@@ -156,7 +156,7 @@ def run_beat_classification(
             with torch.no_grad() if mode == "linear_probe" else torch.enable_grad():
                 with autocast(device_type="cuda", dtype=torch.bfloat16):
                     out = model(batch)
-            logits = head(out["beat_repr"])
+            logits = head(out["beat_repr"].float())
             loss = head.compute_loss(logits, batch["beat_labels"], batch["valid_mask"])
             loss.backward()
             optimizer.step()
@@ -170,7 +170,7 @@ def run_beat_classification(
                 batch = {k: v.to(device, non_blocking=True) if isinstance(v, torch.Tensor) else v
                          for k, v in batch.items()}
                 out = model(batch)
-                logits = head(out["beat_repr"])
+                logits = head(out["beat_repr"].float())
                 mask = batch["valid_mask"]
                 preds = logits[mask].argmax(dim=-1).cpu().numpy()
                 labels = batch["beat_labels"][mask].cpu().numpy()
@@ -196,7 +196,7 @@ def run_beat_classification(
             batch = {k: v.to(device, non_blocking=True) if isinstance(v, torch.Tensor) else v
                      for k, v in batch.items()}
             out = model(batch)
-            logits = head(out["beat_repr"])
+            logits = head(out["beat_repr"].float())
             mask = batch["valid_mask"]
             preds = logits[mask].argmax(dim=-1).cpu().numpy()
             labels = batch["beat_labels"][mask].cpu().numpy()
@@ -242,7 +242,7 @@ def run_pvc_burden(
             optimizer.zero_grad(set_to_none=True)
             with torch.no_grad():
                 out = model(batch)
-            pred = head(out["day_embed"], out["episode_ctx"], batch["n_episodes"])
+            pred = head(out["day_embed"].float(), out["episode_ctx"].float(), batch["n_episodes"])
             loss = head.compute_loss(pred, batch["day_stats"])
             loss.backward()
             optimizer.step()
@@ -255,7 +255,7 @@ def run_pvc_burden(
                 batch = {k: v.to(device, non_blocking=True) if isinstance(v, torch.Tensor) else v
                          for k, v in batch.items()}
                 out = model(batch)
-                pred = head(out["day_embed"], out["episode_ctx"], batch["n_episodes"])
+                pred = head(out["day_embed"].float(), out["episode_ctx"].float(), batch["n_episodes"])
                 all_preds.append(pred.cpu().numpy())
                 burden = batch["day_stats"][:, 7:8]
                 count = torch.log1p(batch["day_stats"][:, 6:7])
@@ -285,7 +285,7 @@ def run_pvc_burden(
             batch = {k: v.to(device, non_blocking=True) if isinstance(v, torch.Tensor) else v
                      for k, v in batch.items()}
             out = model(batch)
-            pred = head(out["day_embed"], out["episode_ctx"], batch["n_episodes"])
+            pred = head(out["day_embed"].float(), out["episode_ctx"].float(), batch["n_episodes"])
             all_preds.append(pred.cpu().numpy())
             burden = batch["day_stats"][:, 7:8]
             count = torch.log1p(batch["day_stats"][:, 6:7])
@@ -331,7 +331,7 @@ def run_report_concepts(
             optimizer.zero_grad(set_to_none=True)
             with torch.no_grad():
                 out = model(batch)
-            logits = head(out["day_embed"])
+            logits = head(out["day_embed"].float())
             loss = head.compute_loss(logits, batch["concept_labels"])
             loss.backward()
             optimizer.step()
@@ -346,7 +346,7 @@ def run_report_concepts(
                 batch = {k: v.to(device, non_blocking=True) if isinstance(v, torch.Tensor) else v
                          for k, v in batch.items()}
                 out = model(batch)
-                logits = head(out["day_embed"])
+                logits = head(out["day_embed"].float())
                 all_logits.append(logits.cpu().numpy())
                 all_labels.append(batch["concept_labels"].cpu().numpy())
 
@@ -370,7 +370,7 @@ def run_report_concepts(
             batch = {k: v.to(device, non_blocking=True) if isinstance(v, torch.Tensor) else v
                      for k, v in batch.items()}
             out = model(batch)
-            logits = head(out["day_embed"])
+            logits = head(out["day_embed"].float())
             all_logits.append(logits.cpu().numpy())
             all_labels.append(batch["concept_labels"].cpu().numpy())
 
